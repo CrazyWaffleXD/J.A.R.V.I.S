@@ -1,0 +1,31 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/jarvis-core",
+    "crates/jarvis-cli",
+    "crates/jarvis-platform",
+    "crates/jarvis-audio",
+    "crates/commands/cmd-open",
+    "crates/commands/cmd-weather",
+    "crates/commands/cmd-volume",
+    "crates/commands/cmd-note",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-only"
+rust-version = "1.75"
+
+[workspace.dependencies]
+# Внешние зависимости. Новые добавляются только вместе с записью в DECISIONS.md.
+anyhow = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+tokio = { version = "1.0", features = ["rt-multi-thread", "macros"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Внутренние крейты.
+jarvis-core = { path = "crates/jarvis-core" }
+jarvis-platform = { path = "crates/jarvis-platform" }
+jarvis-audio = { path = "crates/jarvis-audio" }

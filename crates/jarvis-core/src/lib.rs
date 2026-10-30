@@ -1,0 +1,13 @@
+//! Ядро jarvis: трейты, диспетчер, конфиг. Публичный API стабилен, менять только через DECISIONS.
+
+pub mod command;
+pub mod config;
+pub mod context;
+pub mod dispatcher;
+pub mod error;
+
+pub use command::Command;
+pub use config::Config;
+pub use context::Context;
+pub use dispatcher::Dispatcher;
+pub use error::Result;
