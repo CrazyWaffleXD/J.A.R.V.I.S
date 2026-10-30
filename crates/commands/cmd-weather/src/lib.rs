@@ -1,8 +1,13 @@
+use std::time::Duration;
+
 use anyhow::{anyhow, Context as _, Result};
 use jarvis_core::{persona, Command, Context, Output};
 use serde_json::Value;
 
-/// Команда `weather`: текущая погода по open-meteo.
+/// Таймаут на один HTTP-запрос: wttr.in не должен подвешивать REPL.
+const HTTP_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Команда `weather`: текущая погода по open-meteo, с fallback на wttr.in.
 #[derive(Debug, Default)]
 pub struct WeatherCommand;
 
@@ -41,18 +46,81 @@ impl Command for WeatherCommand {
             .filter(|s| !s.is_empty());
         let city = rest.unwrap_or(&ctx.config.weather.default_city);
 
-        let client = reqwest::Client::new();
-        let (lat, lon, city_name) = geocode(&client, city).await?;
-        let (temp, code) = forecast(&client, lat, lon).await?;
-
-        Ok(Output {
-            text: persona::success(&format!(
-                "{city_name}: {temp:.0}°C, {}",
-                weather_description(code)
-            )),
-            speech: None,
-        })
+        match try_open_meteo(city).await {
+            Ok(output) => Ok(output),
+            Err(e1) => {
+                tracing::warn!(?e1, "open-meteo failed, trying wttr.in");
+                match try_wttr_in(city).await {
+                    Ok(output) => Ok(output),
+                    Err(e2) => Err(anyhow!("open-meteo: {e1:#}; wttr.in: {e2:#}")),
+                }
+            }
+        }
     }
+}
+
+/// HTTP-клиент с общим таймаутом.
+fn http_client() -> Result<reqwest::Client> {
+    reqwest::Client::builder()
+        .timeout(HTTP_TIMEOUT)
+        .build()
+        .map_err(|e| anyhow!("не смог создать HTTP-клиент: {e}"))
+}
+
+/// Основной провайдер: geocoding + forecast open-meteo.
+async fn try_open_meteo(city: &str) -> Result<Output> {
+    let client = http_client()?;
+    let (lat, lon, city_name) = geocode(&client, city).await?;
+    let (temp, code) = forecast(&client, lat, lon).await?;
+
+    Ok(Output {
+        text: persona::success(&format!(
+            "{city_name}: {temp:.0}°C, {}",
+            weather_description(code)
+        )),
+        speech: None,
+    })
+}
+
+/// Fallback: wttr.in принимает имя города напрямую, без geocoding.
+async fn try_wttr_in(city: &str) -> Result<Output> {
+    let client = http_client()?;
+    let url = format!("https://wttr.in/{}?format=j1", urlencoding::encode(city));
+
+    let body: Value = client
+        .get(&url)
+        .send()
+        .await
+        .context("wttr.in")?
+        .error_for_status()
+        .map_err(|e| anyhow!("wttr.in вернул ошибку: {e}"))?
+        .json()
+        .await
+        .map_err(|e| anyhow!("не разобрал ответ wttr.in: {e}"))?;
+
+    let current = body
+        .get("current_condition")
+        .and_then(Value::as_array)
+        .and_then(|conditions| conditions.first())
+        .ok_or_else(|| anyhow!("в ответе wttr.in нет current_condition"))?;
+
+    let temp = current
+        .get("temp_C")
+        .and_then(Value::as_str)
+        .ok_or_else(|| anyhow!("в ответе wttr.in нет temp_C"))?;
+    let desc = current
+        .get("weatherDesc")
+        .and_then(Value::as_array)
+        .and_then(|descriptions| descriptions.first())
+        .and_then(|item| item.get("value"))
+        .and_then(Value::as_str)
+        .ok_or_else(|| anyhow!("в ответе wttr.in нет weatherDesc"))?
+        .trim();
+
+    Ok(Output {
+        text: persona::success(&format!("{city}: {temp}°C, {desc}")),
+        speech: None,
+    })
 }
 
 /// Найти координаты и каноническое имя города.

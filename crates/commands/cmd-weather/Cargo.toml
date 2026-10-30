@@ -12,4 +12,5 @@ async-trait.workspace = true
 jarvis-core = { path = "../../jarvis-core" }
 reqwest.workspace = true
 serde_json.workspace = true
+tracing.workspace = true
 urlencoding.workspace = true

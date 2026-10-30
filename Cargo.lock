@@ -491,6 +491,7 @@ dependencies = [
  "jarvis-core",
  "reqwest",
  "serde_json",
+ "tracing",
  "urlencoding",
 ]
 
