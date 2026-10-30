@@ -15,6 +15,7 @@ anyhow.workspace = true
 async-trait.workspace = true
 jarvis-core.workspace = true
 jarvis-cmd-open = { path = "../commands/cmd-open" }
+jarvis-cmd-weather = { path = "../commands/cmd-weather" }
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true

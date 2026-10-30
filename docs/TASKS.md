@@ -19,9 +19,12 @@
 - [ ] jarvis-platform: set_volume (Linux pactl / Windows IAudioEndpointVolume)
 - [ ] jarvis-audio: play_file (rodio)
 - [x] cmd-open
-- [ ] cmd-weather (open-meteo или wttr.in)
+- [x] jarvis-core: persona (фразы greeting/success/error/…)
+- [x] cmd-weather (open-meteo)
 - [ ] cmd-volume
 - [ ] cmd-note (JSON в dirs::data_dir)
+- [ ] Vosk STT
+- [ ] Mistral LLM
 - [ ] jarvis-cli: HTTP API (axum, /cmd /speak, X-Token)
 - [ ] README финализировать
 - [ ] релиз v0.1.0

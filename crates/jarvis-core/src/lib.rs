@@ -5,6 +5,7 @@ pub mod config;
 pub mod context;
 pub mod dispatcher;
 pub mod error;
+pub mod persona;
 
 pub use command::{Command, Output, Speech};
 pub use config::Config;

@@ -128,3 +128,23 @@ Windows/macOS), не тащить open/xdg-open вручную. urlencoding —
 (`dyn Command`). `async-trait` — де-факто стандарт (используется axum,
 tower), макрос-трансформер без рантайма. Альтернатива — ручной
 `Pin<Box<dyn Future>>` в каждой реализации, больше шума.
+
+## 2026-10-31 — Зависимости fastrand, reqwest, serde_json
+**Решение:** fastrand = "2" (jarvis-core, для persona);
+reqwest = { json, rustls-tls } (cmd-weather); serde_json = "1"
+(cmd-weather).
+**Причина:** fastrand (~10 КБ, без зависимостей) — рандом фраз
+persona. reqwest+rustls-tls — HTTP без openssl на Linux.
+serde_json — парсинг open-meteo.
+
+## 2026-10-31 — Провайдер погоды open-meteo
+**Решение:** weather через open-meteo (geocoding + forecast),
+парсинг через serde_json::Value (без структур).
+**Причина:** Бесплатно, без ключа, стабильный JSON, покрывает
+города по имени. Структуры — избыточны для двух полей, MVP.
+
+## 2026-10-31 — persona как модуль jarvis-core
+**Решение:** Фразы в jarvis-core/src/persona.rs, пулы
+&'static [&'static str], рандом через fastrand.
+**Причина:** Ответы в стиле Джарвиса нужны всем командам.
+Хардкод-константы на старте; TOML/LLM — позже.

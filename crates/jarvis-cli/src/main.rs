@@ -1,7 +1,8 @@
 ﻿use std::io::{self, Write};
 
 use jarvis_cmd_open::OpenCommand;
-use jarvis_core::{Command, Config, Context, Dispatcher, Output, Result};
+use jarvis_cmd_weather::WeatherCommand;
+use jarvis_core::{persona, Command, Config, Context, Dispatcher, Output, Result};
 use tracing_subscriber::EnvFilter;
 
 /// Маркер: команда `help` просит REPL напечатать список команд.
@@ -45,14 +46,17 @@ fn help_text(dispatcher: &Dispatcher) -> String {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // Логи — в stderr, чтобы stdout оставался чистым для REPL и персонажа.
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
         )
+        .with_writer(std::io::stderr)
         .init();
 
     let mut dispatcher = Dispatcher::new();
     dispatcher.register(Box::new(OpenCommand::new()));
+    dispatcher.register(Box::new(WeatherCommand::new()));
     dispatcher.register(Box::new(BuiltinHelpCommand));
 
     let ctx = Context {
@@ -60,7 +64,7 @@ async fn main() -> anyhow::Result<()> {
     };
 
     tracing::info!(version = env!("CARGO_PKG_VERSION"), "jarvis starting");
-    println!("jarvis {}", env!("CARGO_PKG_VERSION"));
+    println!("{}", persona::greeting());
 
     let stdin = io::stdin();
     loop {
@@ -88,11 +92,11 @@ async fn main() -> anyhow::Result<()> {
                     println!("{}", output.text);
                 }
             }
-            Some(Err(e)) => eprintln!("ошибка: {e:#}"),
-            None => println!("не понял: {line}"),
+            Some(Err(e)) => eprintln!("{}", persona::error(&format!("{e:#}"))),
+            None => println!("{}", persona::not_understood(line)),
         }
     }
 
-    println!("пока");
+    println!("{}", persona::farewell());
     Ok(())
 }

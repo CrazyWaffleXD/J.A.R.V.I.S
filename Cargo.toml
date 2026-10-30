@@ -21,7 +21,10 @@ rust-version = "1.75"
 # Внешние зависимости. Новые добавляются только вместе с записью в DECISIONS.md.
 anyhow = "1.0"
 async-trait = "0.1"
+fastrand = "2"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 serde = { version = "1.0", features = ["derive"] }
+serde_json = "1"
 tokio = { version = "1.0", features = ["rt-multi-thread", "macros"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

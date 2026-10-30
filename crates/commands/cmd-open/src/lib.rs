@@ -47,7 +47,7 @@ impl Command for OpenCommand {
         webbrowser::open(&url).map_err(|e| anyhow!("не смог открыть {url}: {e}"))?;
 
         Ok(Output {
-            text: format!("Открываю {url}"),
+            text: jarvis_core::persona::success(&format!("Открываю {url}")),
             speech: None,
         })
     }

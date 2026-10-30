@@ -1,29 +1,35 @@
-# State — обновлено 2026-10-31, сессия #2 (сквозной сценарий + cmd-open)
+# State — обновлено 2026-10-31, сессия #2b (persona + cmd-weather)
 
 ## Готово
 
 - workspace + скелет крейтов (core, cli, platform, audio, commands/*)
-- AGENTS.md, SPEC.md, STATE.md, TASKS.md, DECISIONS.md
-- LICENSE GPL-3.0 (полный текст)
+- AGENTS.md, SPEC.md, STATE.md, TASKS.md, DECISIONS.md, LICENSE GPL-3.0
 - rust-toolchain.toml (stable 1.75+)
 - cargo fmt / check / clippy -D warnings — чисто
-- jarvis-core: новый трейт `Command`
-  (`name` / `description` / `matches` / `async run`), `execute` удалён
-- jarvis-core: `Output { text, speech }`, `enum Speech { File, Bytes }`
-- jarvis-core: `Context { config }` (derive Clone), `Config` (Clone+Default)
-- jarvis-core: `Dispatcher` с `Vec<Box<dyn Command>>`,
-  `register`, `commands`, `async dispatch` (первая совпавшая команда)
-- jarvis-core: реэкспорт `Output`, `Speech`, `Command`, `Dispatcher`,
-  `Context`, `Config`, `Result`
-- jarvis-cli: REPL на `std::io` (prompt + flush, EOF/exit/quit, пустой ввод)
-- jarvis-cli: `BuiltinHelpCommand` (name=help, matches help/?); список
-  печатает REPL по плейсхолдеру `__HELP__`, обходя `dispatcher.commands()`
-- cmd-open: реальная команда (`open` / `открой`), нормализация URL,
-  DDG-поиск для не-URL, вывод «Открываю <url>»
-- cmd-weather / cmd-volume / cmd-note: приведены к новой сигнатуре,
-  `matches() == false`, `run() -> Err("not implemented")`
-- сквозной прогон REPL: open URL / поиск / открой / help / open без
-  аргумента / неизвестный ввод / exit — работают как задумано
+- jarvis-core: трейт `Command` (`name` / `description` / `matches` /
+  `async run`), `Output { text, speech }`, `enum Speech`
+- jarvis-core: `Context { config }`, `Dispatcher`
+  (`register` / `commands` / `async dispatch`)
+- jarvis-core: `persona` — `greeting`, `success`, `error`,
+  `not_understood`, `farewell`; пулы `&'static str`, рандом через
+  `fastrand`
+- jarvis-core: `Config { weather: WeatherConfig }`,
+  `WeatherConfig { default_city }` (Default = "Moscow"), `Deserialize`
+  сохранён для будущей загрузки TOML
+- jarvis-cli: REPL на `std::io`; регистрация open + weather + help;
+  greeting из persona первой строкой, ошибки через `persona::error`,
+  неизвестный ввод через `persona::not_understood`, выход через
+  `persona::farewell`
+- jarvis-cli: логи `tracing` переведены на stderr, чтобы stdout был
+  чистым (greeting и ответы REPL)
+- cmd-open: обёрнут в `persona::success` («… Открываю <url>»)
+- cmd-weather: реальная реализация на open-meteo — geocoding
+  (`geocoding-api.open-meteo.com`) + forecast
+  (`api.open-meteo.com`), WMO-коды → русские описания, город из
+  аргумента или `config.weather.default_city`
+- проверено вживую: greeting / open / help / not_understood / farewell,
+  geocoding для Moscow и «Москва»; форматирование прогноза проверено
+  на локальном мок-ответе open-meteo
 
 ## В работе
 
@@ -31,24 +37,38 @@
 
 ## Известные проблемы
 
-- `help` использует плейсхолдер `__HELP__` (осознанно, чтобы не тащить
-  Arc/Mutex/Weak); при появлении HTTP API список команд придётся
-  формировать иначе
-- `webbrowser::open` вызывается синхронно внутри async `run` (короткий
-  вызов запуска процесса, на v0.1 приемлемо)
+- В текущем окружении `api.open-meteo.com` (157.90.83.168) недоступен:
+  TCP-коннект на 80/443 таймаутит, при этом
+  `geocoding-api.open-meteo.com` (202.61.206.6) работает. Код корректен,
+  живой прогноз не получен из-за сети; проверен на мок-ответе.
+- `weather Atlantis` не даёт «город не найден»: open-meteo знает
+  Atlantis (ЮАР), поэтому по текущей логике вернётся погода для него.
+  Ошибка «город не найден» возникает только при пустом `results`.
+- Температура округляется при выводе (`{temp:.0}` → `5°C`); сырое
+  значение open-meteo — `f64` (`5.3`), поэтому фактическая цифра может
+  отличаться от показанной на десятые.
+- Ошибки HTTP-шагов помечены контекстом `geocoding` / `forecast`
+  (`.context(...)` из anyhow), в REPL видна вся цепочка, например
+  `forecast: error sending request …: tcp connect error …`
+- `help` по-прежнему на плейсхолдере `__HELP__` (осознанно, без
+  Arc/Mutex/Weak)
+- `webbrowser::open` синхронный внутри async `run` (короткий вызов)
 
 ## Следующий шаг
 
-- cmd-weather: нужны reqwest, serde_json и tokio-фичи —
-  обсудить и записать в DECISIONS перед добавлением зависимостей
+- cmd-volume (Linux `pactl` / Windows `IAudioEndpointVolume`)
+- cmd-note (JSON в `dirs::data_dir`)
 
 ## Важное для следующей сессии
 
-- path-зависимость команд: crates/commands/* →
-  ../../jarvis-core (НЕ ../.., там виртуальный манифест)
-- jarvis-cli зависит от jarvis-cmd-open по path
+- `reqwest` подключён с `default-features = false` и
+  `features = ["json", "rustls-tls"]` — не добавлять native-tls/openssl
+- город для weather берётся из `config.weather.default_city`
+  (default "Moscow"); аргумент команды перекрывает конфиг
+- path-зависимость команд: crates/commands/* → ../../jarvis-core
+- jarvis-cli зависит от jarvis-cmd-open и jarvis-cmd-weather по path
 - публичный API jarvis-core не менять без DECISIONS.md
-- `cargo` в PATH не всегда виден из шелла: добавлять
-  `$env:Path = "C:\Users\zam\.cargo\bin;$env:Path"` (Windows)
-- погодные/сетевые крейты (reqwest, serde_json) появятся пошагово,
-  каждый с записью в DECISIONS
+- `cargo` не всегда в PATH из шелла (Windows):
+  `$env:Path = "C:\Users\zam\.cargo\bin;$env:Path"`
+- при перенаправлении stdout на Windows Rust пишет в OEM-кодировке
+  (cp866) — читать вывод с учётом этого
