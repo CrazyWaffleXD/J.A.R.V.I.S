@@ -1,5 +1,5 @@
 use anyhow::Result;
-use jarvis_core::{Command, Context};
+use jarvis_core::{Command, Context, Output};
 
 /// Команда `weather`: текущая погода для заданного города.
 ///
@@ -14,6 +14,7 @@ impl WeatherCommand {
     }
 }
 
+#[async_trait::async_trait]
 impl Command for WeatherCommand {
     fn name(&self) -> &'static str {
         "weather"
@@ -23,7 +24,11 @@ impl Command for WeatherCommand {
         "показать текущую погоду"
     }
 
-    fn execute(&self, _ctx: &mut Context, _args: &[String]) -> Result<()> {
+    fn matches(&self, _input: &str) -> bool {
+        false
+    }
+
+    async fn run(&self, _input: &str, _ctx: &Context) -> Result<Output> {
         Err(anyhow::anyhow!("not implemented"))
     }
 }

@@ -1,5 +1,5 @@
 use anyhow::Result;
-use jarvis_core::{Command, Context};
+use jarvis_core::{Command, Context, Output};
 
 /// Команда `volume`: изменить системную громкость.
 #[derive(Debug, Default)]
@@ -12,6 +12,7 @@ impl VolumeCommand {
     }
 }
 
+#[async_trait::async_trait]
 impl Command for VolumeCommand {
     fn name(&self) -> &'static str {
         "volume"
@@ -21,7 +22,11 @@ impl Command for VolumeCommand {
         "изменить системную громкость"
     }
 
-    fn execute(&self, _ctx: &mut Context, _args: &[String]) -> Result<()> {
+    fn matches(&self, _input: &str) -> bool {
+        false
+    }
+
+    async fn run(&self, _input: &str, _ctx: &Context) -> Result<Output> {
         Err(anyhow::anyhow!("not implemented"))
     }
 }

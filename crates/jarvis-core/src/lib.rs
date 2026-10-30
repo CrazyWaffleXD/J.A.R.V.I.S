@@ -6,7 +6,7 @@ pub mod context;
 pub mod dispatcher;
 pub mod error;
 
-pub use command::Command;
+pub use command::{Command, Output, Speech};
 pub use config::Config;
 pub use context::Context;
 pub use dispatcher::Dispatcher;

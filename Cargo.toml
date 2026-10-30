@@ -20,10 +20,13 @@ rust-version = "1.75"
 [workspace.dependencies]
 # Внешние зависимости. Новые добавляются только вместе с записью в DECISIONS.md.
 anyhow = "1.0"
+async-trait = "0.1"
 serde = { version = "1.0", features = ["derive"] }
 tokio = { version = "1.0", features = ["rt-multi-thread", "macros"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+urlencoding = "2"
+webbrowser = "1"
 
 # Внутренние крейты.
 jarvis-core = { path = "crates/jarvis-core" }
