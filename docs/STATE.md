@@ -1,37 +1,46 @@
-# State — обновлено 2026-10-31, сессия #2b (persona + cmd-weather)
+# State — обновлено 2026-10-31, сессия #3 (Vosk STT)
 
 ## Готово
 
-- workspace + скелет крейтов (core, cli, platform, audio, commands/*)
+- workspace + скелет крейтов (core, cli, platform, audio, stt-vosk,
+  commands/*)
 - AGENTS.md, SPEC.md, STATE.md, TASKS.md, DECISIONS.md, LICENSE GPL-3.0
 - rust-toolchain.toml (stable 1.75+)
 - cargo fmt / check / clippy -D warnings — чисто
 - jarvis-core: трейт `Command` (`name` / `description` / `matches` /
   `async run`), `Output { text, speech }`, `enum Speech`
-- jarvis-core: `Context { config }`, `Dispatcher`
+- jarvis-core: `Context { config, stt }`, `Dispatcher`
   (`register` / `commands` / `async dispatch`)
 - jarvis-core: `persona` — `greeting`, `success`, `error`,
   `not_understood`, `farewell`; пулы `&'static str`, рандом через
   `fastrand`
-- jarvis-core: `Config { weather: WeatherConfig }`,
-  `WeatherConfig { default_city }` (Default = "Moscow"), `Deserialize`
-  сохранён для будущей загрузки TOML
-- jarvis-cli: REPL на `std::io`; регистрация open + weather + help;
-  greeting из persona первой строкой, ошибки через `persona::error`,
-  неизвестный ввод через `persona::not_understood`, выход через
-  `persona::farewell`
-- jarvis-cli: логи `tracing` переведены на stderr, чтобы stdout был
-  чистым (greeting и ответы REPL)
-- cmd-open: обёрнут в `persona::success` («… Открываю <url>»)
-- cmd-weather: open-meteo — geocoding
-  (`geocoding-api.open-meteo.com`) + forecast
-  (`api.open-meteo.com`), WMO-коды → русские описания, город из
-  аргумента или `config.weather.default_city`
-- cmd-weather: fallback на `https://wttr.in/{city}?format=j1`, если
-  open-meteo упал (сеть/блокировка); HTTP-таймаут 5 с на запрос у обоих
-  провайдеров
-- проверено вживую: greeting / open / help / not_understood / farewell,
-  погода через wttr.in (`Moscow: 7°C, Пасмурно`, `Москва: 7°C, Пасмурно`)
+- jarvis-core: `Config { weather, stt }` + `Config::load` (TOML,
+  зависимость `toml = "0.8"`)
+- jarvis-core: `stt` — трейт `SpeechToText`
+  (`async transcribe(&[f32], u32) -> Result<String>`) и `SttConfig
+  { model_path, sample_rate }` (Default: пустой путь, 16000)
+- jarvis-cli: REPL на `std::io`; читает `config.toml` из текущего
+  каталога (ошибка → предупреждение + defaults); регистрация
+  open + weather + listen + help
+- jarvis-cli: при старте строит STT через
+  `jarvis_stt_vosk::build_vosk`, если есть `config.stt`; ошибка →
+  предупреждение в stderr, `Context.stt = None`, CLI продолжает
+- jarvis-cli: `listen` — запись `record_until_silence(rate, 1500,
+  15000)` в `spawn_blocking`, `transcribe`, вывод «Распознано: …»;
+  пустой результат → `persona::not_understood`
+- jarvis-cli: логи `tracing` в stderr, stdout чистый
+- jarvis-stt-vosk: `VoskStt` (Arc<Model>), `build_vosk`; `Recognizer`
+  создаётся внутри `spawn_blocking`; `build.rs` читает `VOSK_LIB_DIR`
+- jarvis-audio: `record_until_silence` на cpal 0.15 — default input,
+  downmix в моно, RMS-порог `0.01`, опрос каждые 50 мс, линейная
+  передискретизация к запрошенной частоте; `play_file` ещё заглушка
+- cmd-open: обёрнут в `persona::success`
+- cmd-weather: open-meteo + fallback wttr.in (`lang=ru`), таймаут 5 с
+- проверено вживую (без модели): `help` показывает `listen`;
+  `listen` без `[stt]` печатает «STT не настроена…»; битый путь к
+  модели → warning в stderr + CLI работает; `exit` → farewell
+- проверено вживую (ранее): greeting / open / not_understood /
+  погода через wttr.in
 
 ## В работе
 
@@ -39,44 +48,57 @@
 
 ## Известные проблемы
 
-- `api.open-meteo.com` недоступен в ряде регионов (РФ, блокировка
-  хоста): forecast таймаутит, поэтому в этом окружении погода идёт
-  через fallback `wttr.in` (работает). Geocoding open-meteo при этом
-  доступен.
-- wttr.in с `lang=ru`: перевод лежит в `lang_ru[0].value`
-  («Пасмурно»), а `weatherDesc` остаётся английским («Overcast»).
-  Код берёт `lang_ru`, затем `weatherDesc`, пустое значение →
-  «неизвестно».
-- `weather Atlantis` не даёт «город не найден»: open-meteo знает
-  Atlantis (ЮАР), поэтому по текущей логике вернётся погода для него.
-  Ошибка «город не найден» возникает только при пустом `results`.
-- Температура округляется при выводе (`{temp:.0}` → `5°C`); сырое
-  значение open-meteo — `f64` (`5.3`), поэтому фактическая цифра может
-  отличаться от показанной на десятые.
-- Ошибки HTTP-шагов помечены контекстом `geocoding` / `forecast`
-  (`.context(...)` из anyhow), в REPL видна вся цепочка, например
-  `forecast: error sending request …: tcp connect error …`
-- `help` по-прежнему на плейсхолдере `__HELP__` (осознанно, без
-  Arc/Mutex/Weak)
-- `webbrowser::open` синхронный внутри async `run` (короткий вызов)
+- Крейт `vosk` линкуется с `libvosk` на этапе сборки:
+  `cargo check`/`clippy` проходят без библиотеки (метаданные), но
+  `cargo build`/`run` без `libvosk.lib` (Windows) или `libvosk.so`
+  (Linux) падают на линковке. Собранный бинарь без DLL/SO в путях
+  загрузчика не стартует — это ошибка ОС, перехватить её из
+  приложения нельзя. Поэтому «нет libvosk → warn и работаем»
+  выполняется только для отсутствующей модели/конфига.
+- Windows: официальный `vosk-win64-*.zip` содержит `libvosk.dll`,
+  `libvosk.lib` и MinGW-рантайм (`libgcc_s_seh-1.dll` и др.).
+  Для сборки нужен `VOSK_LIB_DIR` (или путь в `LIB` MSVC), для
+  запуска — каталог в `PATH`.
+- `api.open-meteo.com` недоступен в ряде регионов (РФ): погода идёт
+  через fallback `wttr.in`.
+- wttr.in с `lang=ru`: перевод в `lang_ru[0].value`, `weatherDesc`
+  остаётся английским.
+- Запись: тишина определяется порогом RMS `0.01`; при высоком шуме
+  микрофона запись идёт до `max_ms` (15 с), при очень тихой речи
+  возможна ранняя остановка. VAD не используется осознанно.
+- Частота устройства (обычно 48000) приводится к `sample_rate`
+  линейной интерполяцией — для речи достаточно, но не Hi-Fi.
+- `listen` передаёт `config.stt.sample_rate` (fallback 16000) и в
+  запись, и в распознавание; модель small-ru обучена на 16 кГц.
+- `help` по-прежнему на плейсхолдере `__HELP__`.
+- `webbrowser::open` синхронный внутри async `run`.
 
 ## Следующий шаг
 
-- cmd-volume (Linux `pactl` / Windows `IAudioEndpointVolume`)
-- cmd-note (JSON в `dirs::data_dir`)
+- голосовой режим: `listen` → распознанный текст в `dispatch`
+  (следующая сессия)
+- либо cmd-volume (Linux `pactl` / Windows `IAudioEndpointVolume`)
+- либо cmd-note (JSON в `dirs::data_dir`)
 
 ## Важное для следующей сессии
 
-- `reqwest` подключён с `default-features = false` и
-  `features = ["json", "rustls-tls"]` — не добавлять native-tls/openssl
-- город для weather берётся из `config.weather.default_city`
-  (default "Moscow"); аргумент команды перекрывает конфиг
-- weather: сначала open-meteo, при любой ошибке — wttr.in
-  (`?format=j1&lang=ru`); у обоих клиентов таймаут 5 с
-- path-зависимость команд: crates/commands/* → ../../jarvis-core
-- jarvis-cli зависит от jarvis-cmd-open и jarvis-cmd-weather по path
+- `libvosk` и модели Vosk пользователь ставит вручную; в репо их нет
+  и автозагрузки нет (см. AGENTS.md, README).
+- API `vosk` 0.3.1 отличается от «наивного»: `Model::new` →
+  `Option<Model>`, `Recognizer::new(&model, f32)` → `Option`,
+  `accept_waveform(&[i16])` без sample_rate,
+  `final_result().single()` → `Option<CompleteResultSingle>`, текст в
+  поле `.text: &str`.
+- `Recognizer` в 0.3.1 формально `Send + Sync`, но создаётся внутри
+  `spawn_blocking` (не блокируем async-рантайм, не шарим состояние).
+- `Context` не выводит `Debug` автоматически — реализован вручную
+  из-за `Arc<dyn SpeechToText>`.
+- `config.toml` читается из текущего каталога; `config.toml` в
+  `.gitignore`, пример — `config.example.toml`.
+- path-зависимости: crates/commands/* → ../../jarvis-core;
+  jarvis-stt-vosk → ../jarvis-core
 - публичный API jarvis-core не менять без DECISIONS.md
 - `cargo` не всегда в PATH из шелла (Windows):
   `$env:Path = "C:\Users\zam\.cargo\bin;$env:Path"`
-- при перенаправлении stdout на Windows Rust пишет в OEM-кодировке
-  (cp866) — читать вывод с учётом этого
+- при перенаправлении stdout на Windows PowerShell 5.1 пишет файл в
+  UTF-16; читать `Get-Content -Raw`, а не как cp866

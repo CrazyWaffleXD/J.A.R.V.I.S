@@ -13,7 +13,9 @@ path = "src/main.rs"
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true
+jarvis-audio.workspace = true
 jarvis-core.workspace = true
+jarvis-stt-vosk.workspace = true
 jarvis-cmd-open = { path = "../commands/cmd-open" }
 jarvis-cmd-weather = { path = "../commands/cmd-weather" }
 tokio.workspace = true

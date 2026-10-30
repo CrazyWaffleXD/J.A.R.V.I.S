@@ -11,3 +11,4 @@ anyhow.workspace = true
 async-trait.workspace = true
 fastrand.workspace = true
 serde.workspace = true
+toml.workspace = true

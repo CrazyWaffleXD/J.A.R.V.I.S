@@ -11,9 +11,9 @@
 - [x] команды-заглушки: open, weather, volume, note
 - [x] jarvis-cli печатает приветствие
 - [x] jarvis-core: Output, Speech enum
-- [x] jarvis-core: Context с полями (пока только config)
+- [x] jarvis-core: Context с полями (config, stt)
 - [x] jarvis-core: Dispatcher::register + dispatch
-- [ ] jarvis-core: Config — поля + загрузка TOML
+- [x] jarvis-core: Config — поля + загрузка TOML
 - [x] jarvis-cli: REPL (std::io)
 - [ ] jarvis-platform: open_url (Linux/Windows)
 - [ ] jarvis-platform: set_volume (Linux pactl / Windows IAudioEndpointVolume)
@@ -21,9 +21,13 @@
 - [x] cmd-open
 - [x] jarvis-core: persona (фразы greeting/success/error/…)
 - [x] cmd-weather (open-meteo)
+- [x] jarvis-core::stt (трейт SpeechToText + SttConfig)
+- [x] jarvis-stt-vosk (Vosk 0.3, build_vosk)
+- [x] jarvis-audio: record_until_silence (cpal)
+- [x] команда listen (распознанный текст, без выполнения)
+- [ ] голосовой режим listen → dispatch (следующая сессия)
 - [ ] cmd-volume
 - [ ] cmd-note (JSON в dirs::data_dir)
-- [ ] Vosk STT
 - [ ] Mistral LLM
 - [ ] jarvis-cli: HTTP API (axum, /cmd /speak, X-Token)
 - [ ] README финализировать

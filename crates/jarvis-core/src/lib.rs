@@ -6,9 +6,11 @@ pub mod context;
 pub mod dispatcher;
 pub mod error;
 pub mod persona;
+pub mod stt;
 
 pub use command::{Command, Output, Speech};
 pub use config::Config;
 pub use context::Context;
 pub use dispatcher::Dispatcher;
 pub use error::Result;
+pub use stt::{SpeechToText, SttConfig};

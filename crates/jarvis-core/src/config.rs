@@ -1,4 +1,9 @@
+use std::path::Path;
+
 use serde::Deserialize;
+
+use crate::error::Result;
+use crate::stt::SttConfig;
 
 /// Настройки погоды.
 #[derive(Clone, Debug, Deserialize)]
@@ -16,11 +21,20 @@ impl Default for WeatherConfig {
 }
 
 /// Пользовательская конфигурация jarvis.
-///
-/// Загрузка из TOML появится позже; пока используется `Config::default()`.
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct Config {
     /// Секция `[weather]`.
     #[serde(default)]
     pub weather: WeatherConfig,
+    /// Секция `[stt]`; `None` — голосовой ввод не настроен.
+    #[serde(default)]
+    pub stt: Option<SttConfig>,
+}
+
+impl Config {
+    /// Загрузить конфигурацию из TOML-файла.
+    pub fn load(path: impl AsRef<Path>) -> Result<Self> {
+        let text = std::fs::read_to_string(path)?;
+        Ok(toml::from_str(&text)?)
+    }
 }

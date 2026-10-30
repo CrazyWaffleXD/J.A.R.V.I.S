@@ -1,2 +1,13 @@
 /target
 **/*.rs.bk
+
+# Локальный конфиг: пути и настройки у каждого свои.
+/config.toml
+
+# Нативная библиотека Vosk и модели ставятся пользователем, не коммитим.
+libvosk.dll
+libvosk.so
+libvosk.dylib
+libvosk.lib
+vosk-model-*/
+/models/

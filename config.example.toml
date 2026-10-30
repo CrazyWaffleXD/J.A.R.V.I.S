@@ -1,0 +1,11 @@
+# Пример конфигурации jarvis.
+# Скопируй в config.toml (он не коммитится) и поправь под себя.
+
+[weather]
+default_city = "Moscow"
+
+# Голосовой ввод (Vosk). Раскомментируй после установки libvosk и модели,
+# см. раздел «Голосовой ввод» в README.
+# [stt]
+# model_path = "D:/models/vosk-model-small-ru-0.22"
+# sample_rate = 16000
