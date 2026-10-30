@@ -85,7 +85,10 @@ async fn try_open_meteo(city: &str) -> Result<Output> {
 /// Fallback: wttr.in принимает имя города напрямую, без geocoding.
 async fn try_wttr_in(city: &str) -> Result<Output> {
     let client = http_client()?;
-    let url = format!("https://wttr.in/{}?format=j1", urlencoding::encode(city));
+    let url = format!(
+        "https://wttr.in/{}?format=j1&lang=ru",
+        urlencoding::encode(city)
+    );
 
     let body: Value = client
         .get(&url)
@@ -108,14 +111,29 @@ async fn try_wttr_in(city: &str) -> Result<Output> {
         .get("temp_C")
         .and_then(Value::as_str)
         .ok_or_else(|| anyhow!("в ответе wttr.in нет temp_C"))?;
+    // wttr.in с lang=ru кладёт перевод в lang_ru; weatherDesc остаётся
+    // английским. Берём lang_ru, затем weatherDesc, иначе «неизвестно».
     let desc = current
-        .get("weatherDesc")
+        .get("lang_ru")
         .and_then(Value::as_array)
-        .and_then(|descriptions| descriptions.first())
+        .and_then(|values| values.first())
         .and_then(|item| item.get("value"))
         .and_then(Value::as_str)
-        .ok_or_else(|| anyhow!("в ответе wttr.in нет weatherDesc"))?
+        .or_else(|| {
+            current
+                .get("weatherDesc")
+                .and_then(Value::as_array)
+                .and_then(|values| values.first())
+                .and_then(|item| item.get("value"))
+                .and_then(Value::as_str)
+        })
+        .unwrap_or("")
         .trim();
+    let desc = if desc.is_empty() {
+        "неизвестно"
+    } else {
+        desc
+    };
 
     Ok(Output {
         text: persona::success(&format!("{city}: {temp}°C, {desc}")),

@@ -31,7 +31,7 @@
   open-meteo упал (сеть/блокировка); HTTP-таймаут 5 с на запрос у обоих
   провайдеров
 - проверено вживую: greeting / open / help / not_understood / farewell,
-  погода через wttr.in (`Moscow: 7°C, Overcast`, `Москва: 7°C, Overcast`)
+  погода через wttr.in (`Moscow: 7°C, Пасмурно`, `Москва: 7°C, Пасмурно`)
 
 ## В работе
 
@@ -43,8 +43,10 @@
   хоста): forecast таймаутит, поэтому в этом окружении погода идёт
   через fallback `wttr.in` (работает). Geocoding open-meteo при этом
   доступен.
-- wttr.in отдаёт `weatherDesc` на английском (`Overcast`, `Light rain`),
-  без `lang=ru`; формат ответа это не меняет.
+- wttr.in с `lang=ru`: перевод лежит в `lang_ru[0].value`
+  («Пасмурно»), а `weatherDesc` остаётся английским («Overcast»).
+  Код берёт `lang_ru`, затем `weatherDesc`, пустое значение →
+  «неизвестно».
 - `weather Atlantis` не даёт «город не найден»: open-meteo знает
   Atlantis (ЮАР), поэтому по текущей логике вернётся погода для него.
   Ошибка «город не найден» возникает только при пустом `results`.
@@ -70,7 +72,7 @@
 - город для weather берётся из `config.weather.default_city`
   (default "Moscow"); аргумент команды перекрывает конфиг
 - weather: сначала open-meteo, при любой ошибке — wttr.in
-  (`?format=j1`); у обоих клиентов таймаут 5 с
+  (`?format=j1&lang=ru`); у обоих клиентов таймаут 5 с
 - path-зависимость команд: crates/commands/* → ../../jarvis-core
 - jarvis-cli зависит от jarvis-cmd-open и jarvis-cmd-weather по path
 - публичный API jarvis-core не менять без DECISIONS.md
