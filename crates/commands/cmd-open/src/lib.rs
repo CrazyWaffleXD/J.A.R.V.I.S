@@ -53,13 +53,59 @@ impl Command for OpenCommand {
     }
 }
 
-/// Привести ввод пользователя к URL: готовый URL, домен или поиск DDG.
+/// Привести ввод пользователя к URL: готовый URL, известный сайт, домен
+/// или поиск DDG.
 fn normalize(target: &str) -> String {
     if target.starts_with("http://") || target.starts_with("https://") {
         target.to_string()
+    } else if let Some(url) = known_site(target) {
+        url.to_string()
     } else if !target.contains(char::is_whitespace) && target.contains('.') {
         format!("https://{target}")
     } else {
         format!("https://duckduckgo.com/?q={}", urlencoding::encode(target))
+    }
+}
+
+/// Известные сайты по короткому названию.
+///
+/// LLM охотно возвращает `__CMD__:открой ютуб`, а одно слово без точки
+/// уходило бы в поиск. Для популярных сайтов открываем сразу.
+fn known_site(target: &str) -> Option<&'static str> {
+    match target.trim().to_lowercase().as_str() {
+        "ютуб" | "ютьюб" | "ютюб" | "youtube" => Some("https://www.youtube.com"),
+        "гугл" | "google" => Some("https://www.google.com"),
+        "яндекс" | "yandex" => Some("https://ya.ru"),
+        "вк" | "вконтакте" | "vk" => Some("https://vk.com"),
+        "гитхаб" | "github" => Some("https://github.com"),
+        "телеграм" | "telegram" => Some("https://web.telegram.org"),
+        "википедия" | "wikipedia" => Some("https://ru.wikipedia.org"),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize;
+
+    #[test]
+    fn known_sites_open_directly() {
+        assert_eq!(normalize("ютуб"), "https://www.youtube.com");
+        assert_eq!(normalize("YouTube"), "https://www.youtube.com");
+        assert_eq!(normalize("вк"), "https://vk.com");
+    }
+
+    #[test]
+    fn urls_and_domains_are_kept() {
+        assert_eq!(normalize("https://example.com/a"), "https://example.com/a");
+        assert_eq!(normalize("example.com"), "https://example.com");
+    }
+
+    #[test]
+    fn the_rest_goes_to_search() {
+        assert_eq!(
+            normalize("rust было"),
+            "https://duckduckgo.com/?q=rust%20%D0%B1%D1%8B%D0%BB%D0%BE"
+        );
     }
 }

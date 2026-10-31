@@ -12,6 +12,12 @@ const HELP_PLACEHOLDER: &str = "__HELP__";
 /// Маркер: команда `voice` просит REPL запустить голосовой режим.
 const VOICE_PLACEHOLDER: &str = "__VOICE_LOOP__";
 
+/// Префикс ответа LLM, означающий «выполни команду», а не «ответь текстом».
+///
+/// Протокол описан в системном промпте (`jarvis_core::config::
+/// DEFAULT_SYSTEM_PROMPT`).
+const CMD_PREFIX: &str = "__CMD__:";
+
 /// Встроенная команда `help`: сам список печатает REPL, у которого есть
 /// доступ к зарегистрированным командам.
 struct BuiltinHelpCommand;
@@ -208,15 +214,75 @@ impl Command for BuiltinAskCommand {
             return Err(anyhow::anyhow!("LLM вернула пустой ответ"));
         }
 
+        // Ответ печатается как есть: `persona::success` — для выполненных
+        // команд, а не для реплик LLM. `__CMD__:` выполнит вызывающая
+        // сторона (REPL/voice loop): у команды `ask` нет диспетчера.
         Ok(Output {
-            text: persona::success(answer),
+            text: answer.to_string(),
             speech: None,
         })
     }
 }
 
+/// Разобрать ответ LLM: `__CMD__:<команда>` → команда, иначе `None`.
+fn llm_command(reply: &str) -> Option<&str> {
+    reply.trim().strip_prefix(CMD_PREFIX).map(str::trim)
+}
+
+/// Выполнить команду, которую запросила LLM.
+///
+/// `ask` из ответа LLM не выполняем: это снова ушло бы в LLM.
+async fn run_llm_command(cmd: &str, ctx: &Context, dispatcher: &Dispatcher) {
+    if cmd.is_empty() {
+        println!("{}", persona::not_understood(""));
+        return;
+    }
+
+    if BuiltinAskCommand.matches(cmd) {
+        println!("{}", persona::error("не могу выполнить ask из ask"));
+        return;
+    }
+
+    match dispatcher.dispatch(cmd, ctx).await {
+        Some(Ok(output)) => {
+            if output.text == HELP_PLACEHOLDER {
+                print_help(dispatcher);
+            } else if output.text == VOICE_PLACEHOLDER {
+                println!(
+                    "{}",
+                    persona::error(
+                        "голосовой режим запускается командой voice, а не из ответа LLM"
+                    )
+                );
+            } else {
+                // Вложенные маркеры не выполняем — печатаем как есть.
+                println!("{}", output.text);
+            }
+        }
+        Some(Err(e)) => eprintln!("{}", persona::error(&format!("{e:#}"))),
+        None => println!("{}", persona::not_understood(cmd)),
+    }
+}
+
+/// Обработать ответ LLM: запрос на команду выполняем, обычный текст печатаем.
+///
+/// Обычный ответ модели печатается как есть, без `persona::success`:
+/// это реплика ассистента, а не выполненная команда.
+async fn handle_llm_reply(reply: &str, input: &str, ctx: &Context, dispatcher: &Dispatcher) {
+    let Some(cmd) = llm_command(reply) else {
+        if reply.trim().is_empty() {
+            println!("{}", persona::not_understood(input));
+        } else {
+            println!("{}", reply.trim());
+        }
+        return;
+    };
+
+    run_llm_command(cmd, ctx, dispatcher).await;
+}
+
 /// Не команда — пробуем LLM. Если LLM не настроена, честно говорим об этом.
-async fn answer_with_llm(input: &str, ctx: &Context) {
+async fn answer_with_llm(input: &str, ctx: &Context, dispatcher: &Dispatcher) {
     let Some(llm) = ctx.llm.as_ref() else {
         println!(
             "{}",
@@ -226,8 +292,7 @@ async fn answer_with_llm(input: &str, ctx: &Context) {
     };
 
     match llm.complete(input, None).await {
-        Ok(text) if text.trim().is_empty() => println!("{}", persona::not_understood(input)),
-        Ok(text) => println!("{}", persona::success(text.trim())),
+        Ok(text) => handle_llm_reply(&text, input, ctx, dispatcher).await,
         Err(e) => eprintln!("{}", persona::error(&format!("{e:#}"))),
     }
 }
@@ -304,9 +369,12 @@ async fn run_voice_loop(ctx: &Context, dispatcher: &Dispatcher) -> anyhow::Resul
                     print_help(dispatcher);
                 } else if output.text == VOICE_PLACEHOLDER {
                     println!("{}", persona::error("голосовой режим уже запущен"));
+                } else if let Some(cmd) = llm_command(&output.text) {
+                    // `ask` вернул от LLM запрос на команду.
+                    run_llm_command(cmd, ctx, dispatcher).await;
                 } else {
-                    // `__EXECUTE__` и прочие маркеры печатаем как есть:
-                    // голосовой режим не должен выполнять вложенные команды.
+                    // Прочие маркеры печатаем как есть: голосовой режим
+                    // не должен выполнять вложенные команды.
                     println!("{}", output.text);
                 }
             }
@@ -315,10 +383,9 @@ async fn run_voice_loop(ctx: &Context, dispatcher: &Dispatcher) -> anyhow::Resul
                 // Не команда — возможно, это вопрос к LLM.
                 if let Some(llm) = &ctx.llm {
                     match llm.complete(&text, None).await {
-                        Ok(answer) if !answer.trim().is_empty() => {
-                            println!("{}", persona::success(answer.trim()));
+                        Ok(answer) => {
+                            handle_llm_reply(&answer, &text, ctx, dispatcher).await;
                         }
-                        Ok(_) => println!("{}", persona::not_understood(&text)),
                         Err(e) => eprintln!("{}", persona::error(&format!("{e:#}"))),
                     }
                 } else {
@@ -454,15 +521,57 @@ async fn main() -> anyhow::Result<()> {
                     }
                     // Без фичи `voice` возвращает ошибку, плейсхолдер сюда
                     // не доходит.
+                } else if let Some(cmd) = llm_command(&output.text) {
+                    // `ask` вернул от LLM запрос на команду: выполняем её,
+                    // а не печатаем строку `__CMD__:...`.
+                    run_llm_command(cmd, &ctx, &dispatcher).await;
                 } else {
                     println!("{}", output.text);
                 }
             }
             Some(Err(e)) => eprintln!("{}", persona::error(&format!("{e:#}"))),
-            None => answer_with_llm(line, &ctx).await,
+            None => answer_with_llm(line, &ctx, &dispatcher).await,
         }
     }
 
     println!("{}", persona::farewell());
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{llm_command, Dispatcher, OpenCommand, WeatherCommand};
+
+    #[test]
+    fn parses_command_reply() {
+        assert_eq!(llm_command("__CMD__:открой ютуб"), Some("открой ютуб"));
+        assert_eq!(llm_command("  __CMD__: weather \n"), Some("weather"));
+        assert_eq!(llm_command("__CMD__:"), Some(""));
+    }
+
+    #[test]
+    fn plain_answers_are_not_commands() {
+        assert_eq!(llm_command("Привет! Чем помочь?"), None);
+        assert_eq!(llm_command("попробуй __CMD__:weather"), None);
+    }
+
+    /// Команда из ответа LLM должна находиться среди зарегистрированных:
+    /// иначе REPL ответит «не понял команду».
+    #[test]
+    fn command_reply_matches_registered_commands() {
+        let mut dispatcher = Dispatcher::new();
+        dispatcher.register(Box::new(OpenCommand::new()));
+        dispatcher.register(Box::new(WeatherCommand::new()));
+
+        for reply in ["__CMD__:открой ютуб", "__CMD__:weather"] {
+            let cmd = llm_command(reply).expect("ответ должен быть командой");
+            assert!(
+                dispatcher
+                    .commands()
+                    .iter()
+                    .any(|command| command.matches(cmd)),
+                "команда из {reply} не найдена"
+            );
+        }
+    }
 }

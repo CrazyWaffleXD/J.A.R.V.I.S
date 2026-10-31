@@ -12,7 +12,10 @@ default_city = "Moscow"
 
 # LLM (Mistral). Раскомментируй секцию, чтобы включить умные ответы.
 # Ключ в файле не хранится — только имя переменной окружения.
+# ministral-8b-latest — модель для бесплатного тарифа.
+# system_prompt по умолчанию — промпт Джарвиса с __CMD__: (см. README).
 [llm]
 provider = "mistral"
 api_key_env = "MISTRAL_API_KEY"  # <--- ТУТ ИМЕННО ИМЯ ПЕРЕМЕННОЙ, А НЕ КЛЮЧ
-model = "mistral-large-latest"
+model = "ministral-8b-latest"
+# system_prompt = "Отвечай кратко, одной фразой."

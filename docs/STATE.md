@@ -1,4 +1,4 @@
-# State — обновлено 2026-10-31, сессия #7b (native-tls, сетевые ошибки)
+# State — обновлено 2026-10-31, сессия #8 (system prompt и `__CMD__`)
 
 ## Готово
 
@@ -50,6 +50,10 @@
   модель `mistral-small-latest`, таймаут 30 с), `build_mistral`
   читает ключ только из ENV; пустой ответ/HTTP-ошибка → понятная
   ошибка
+- jarvis-llm-mistral: модель разрешается по приоритету
+  `complete(model)` → `client.model` → `mistral-small-latest`;
+  `[llm].model` из конфига прокидывается в клиент (юнит-тест
+  `model_priority`)
 - jarvis-cli: умный выбор — сначала `dispatcher.dispatch`
   (`matches()`), при `None` запрос в LLM; без LLM — «не понял
   команду, и LLM не настроена»
@@ -73,6 +77,37 @@
   модели → warning в stderr + CLI работает; `exit` → farewell
 - проверено вживую (ранее): greeting / open / not_understood /
   погода через wttr.in
+- jarvis-core: `LlmConfig.system_prompt` + `DEFAULT_SYSTEM_PROMPT`
+  (роль Джарвиса и правило `__CMD__:`); поле с дефолтом, пустая
+  строка отключает промпт; юнит-тесты в `config.rs`
+- jarvis-llm-mistral: поле `MistralClient.system_prompt`, в запросе
+  первым идёт сообщение `role: "system"`, затем `user`;
+  `build_mistral` пробрасывает `cfg.system_prompt`, пустой — не
+  отправляется; юнит-тесты `system_prompt_goes_first`,
+  `empty_or_missing_system_prompt_is_skipped`
+- jarvis-cli: ответ LLM с префиксом `__CMD__:` выполняется диспетчером
+  **до** обычного вывода — в REPL, в `voice` и для команды `ask`;
+  `ask` отдаёт ответ как есть (у команды нет диспетчера); защита от
+  рекурсии «не могу выполнить ask из ask» (ask/спроси); хелперы
+  `llm_command` / `run_llm_command` / `handle_llm_reply`; юнит-тесты
+  парсинга и маршрутизации
+- jarvis-cli: обычный текстовый ответ LLM печатается без
+  `persona::success` (нет «Выполняю, сэр.» перед репликой модели) —
+  приставка осталась только у выполненных команд
+- cmd-open: короткие имена сайтов (`ютуб`/`youtube`, google, яндекс,
+  вк, github, telegram, википедия) открывают сайт напрямую, а не поиск
+  DDG; юнит-тесты `normalize`
+- README: раздел «Настройка LLM (Mistral)» (ключи, `$env:`/`setx`,
+  `ministral-8b-latest`, `system_prompt`, протокол `__CMD__`);
+  `config.example.toml` — модель бесплатного тарифа
+- проверено: `cargo fmt --check`, `cargo check --workspace`,
+  `cargo clippy --workspace --all-targets -- -D warnings` — чисто;
+  `cargo check -p jarvis-cli --features vosk` — чисто; тесты
+  `jarvis-core`, `jarvis-llm-mistral`, `jarvis-cmd-open`,
+  `jarvis-cli` — 12 passed
+- проверено вживую: `открой ютуб` → «Открываю
+  https://www.youtube.com» (браузер открылся); `help` и `exit`
+  работают; без ключа `ask …` → «LLM не настроена»
 
 ## В работе
 
@@ -80,6 +115,13 @@
 
 ## Известные проблемы
 
+- живой прогон `ask открой ютуб` / `ask какая погода` с реальной
+  моделью **не проводился**: на машине нет `MISTRAL_API_KEY`.
+  Парсинг `__CMD__:` и маршрутизация до `open`/`weather` покрыты
+  юнит-тестами, сам `открой ютуб` проверен вживую.
+- модель может вернуть `__CMD__:` с командой, которой нет (опечатка,
+  другой язык) — тогда печатается `persona::not_understood`; это
+  ожидаемое поведение, а не сбой.
 - Крейт `vosk` линкуется с `libvosk` на этапе сборки. Это касается
   только сборки с `--features vosk`: обычные `cargo build` / `run`
   не требуют нативной библиотеки. С фичей:
@@ -141,6 +183,8 @@
 
 ## Следующий шаг
 
+- проверить с реальным ключом: `ask открой ютуб` → `open`,
+  `ask какая погода` → `weather`, `ask привет` → текст
 - cmd-volume (Linux `pactl` / Windows `IAudioEndpointVolume`)
 - либо cmd-note (JSON в `dirs::data_dir`)
 - позже: TTS (озвучка ответов) — учесть эхо wake word
@@ -185,6 +229,24 @@
   `{e:#}` показывает причину вплоть до io-ошибки.
 - `config.toml` читается из текущего каталога; `config.toml` в
   `.gitignore`, пример — `config.example.toml`.
+- `__CMD__:` — строковый протокол из двух мест:
+  `jarvis_core::config::DEFAULT_SYSTEM_PROMPT` (что просим у модели) и
+  `CMD_PREFIX` в `jarvis-cli` (что распознаём). Менять только вместе,
+  иначе модель и парсер разойдутся.
+- `ask` не выполняет команды сам (у команды нет `Dispatcher`): он
+  возвращает ответ LLM с `__CMD__:` как есть, а выполняет REPL или
+  `voice`-цикл. Поэтому логика есть в трёх местах: fallback-LLM,
+  `ask`-output и голосовой режим.
+- `MISTRAL_API_KEY` на машине нет: сетевые ответы Mistral и живой
+  `__CMD__` не проверены.
+- Windows PowerShell 5.1: `$OutputEncoding` по умолчанию ASCII, и
+  кириллица в stdin пайпа ломается (`открой ютуб` → `?????? ?????`).
+  Перед прогоном: `$OutputEncoding = New-Object
+  System.Text.UTF8Encoding $false` и
+  `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8`.
+- `open` теперь знает короткие имена сайтов (`ютуб`, `вк`, …) —
+  таблица `known_site` в `cmd-open`; незнакомое слово по-прежнему
+  уходит в поиск DuckDuckGo.
 - path-зависимости: crates/commands/* → ../../jarvis-core;
   jarvis-stt-vosk → ../jarvis-core
 - публичный API jarvis-core не менять без DECISIONS.md
