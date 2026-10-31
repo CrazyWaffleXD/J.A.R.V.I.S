@@ -629,6 +629,7 @@ dependencies = [
  "jarvis-cmd-open",
  "jarvis-cmd-weather",
  "jarvis-core",
+ "jarvis-llm-mistral",
  "jarvis-stt-vosk",
  "jarvis-wake",
  "tokio",
@@ -687,6 +688,19 @@ dependencies = [
  "fastrand",
  "serde",
  "toml",
+]
+
+[[package]]
+name = "jarvis-llm-mistral"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "jarvis-core",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tracing",
 ]
 
 [[package]]

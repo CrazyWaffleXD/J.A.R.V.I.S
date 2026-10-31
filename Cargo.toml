@@ -7,6 +7,7 @@ members = [
     "crates/jarvis-audio",
     "crates/jarvis-stt-vosk",
     "crates/jarvis-wake",
+    "crates/jarvis-llm-mistral",
     "crates/commands/cmd-open",
     "crates/commands/cmd-weather",
     "crates/commands/cmd-volume",

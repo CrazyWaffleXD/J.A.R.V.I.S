@@ -1,4 +1,4 @@
-# State — обновлено 2026-10-31, сессия #6 (wake word «Джарвис»)
+# State — обновлено 2026-10-31, сессия #7 (Mistral LLM)
 
 ## Готово
 
@@ -43,6 +43,18 @@
   `dispatch`; выход по «стоп/хватит/выход/exit»
 - jarvis-cli: `print_help` вынесен отдельно (help в REPL и в
   голосовом режиме)
+- jarvis-core: трейт `LlmProvider` (`async complete(prompt, model)`),
+  `Context.llm`, секция `[llm]` в `Config` (`provider`,
+  `api_key_env`, по умолчанию `mistral` / `MISTRAL_API_KEY`)
+- jarvis-llm-mistral: `MistralClient` (`POST /chat/completions`,
+  модель `mistral-small-latest`, таймаут 30 с), `build_mistral`
+  читает ключ только из ENV; пустой ответ/HTTP-ошибка → понятная
+  ошибка
+- jarvis-cli: умный выбор — сначала `dispatcher.dispatch`
+  (`matches()`), при `None` запрос в LLM; без LLM — «не понял
+  команду, и LLM не настроена»
+- jarvis-cli: команда `ask` / `спроси` — принудительный запрос в LLM
+- jarvis-cli: в `voice` та же логика: команда → LLM → not_understood
 - jarvis-cli: логи `tracing` в stderr, stdout чистый
 - jarvis-stt-vosk: `VoskStt` (Arc<Model>), `build_vosk`; `Recognizer`
   создаётся внутри `spawn_blocking`; `build.rs` читает `VOSK_LIB_DIR`
@@ -97,6 +109,14 @@
   Для v0.1 принято; Ctrl+C работает.
 - голосовой режим: «Джарвис, погода» одной фразой не сработает —
   wake word и команда записываются отдельно (как у Алисы).
+- проверено (сессия #7): без `MISTRAL_API_KEY` и с секцией `[llm]` —
+  предупреждение при старте, `ask привет` → «LLM не настроена»,
+  свободный текст → «не понял команду, и LLM не настроена»; с
+  заведомо неверным ключом `ask привет` доходит до Mistral и
+  показывает `Mistral API вернул 401 Unauthorized: {"detail":"Invalid
+  API Key"}` (проверены URL, заголовок и разбор ошибки); «погода»
+  выполняет команду и в LLM не уходит. Живого ответа модели нет —
+  валидного ключа на машине не было.
 - проверено (сессия #6, без модели и микрофона): `--features vosk`
   собирается с `VOSK_LIB_DIR`; `voice` без фичи отвечает «голосовой
   ввод не скомпилирован (--features vosk)», с фичей и без `[stt]` —
@@ -113,8 +133,8 @@
 
 - cmd-volume (Linux `pactl` / Windows `IAudioEndpointVolume`)
 - либо cmd-note (JSON в `dirs::data_dir`)
-- либо Mistral LLM (на выбор)
 - позже: TTS (озвучка ответов) — учесть эхо wake word
+- позже: история диалога и стриминг для LLM
 
 ## Важное для следующей сессии
 
@@ -141,7 +161,15 @@
 - `Recognizer` в 0.3.1 формально `Send + Sync`, но создаётся внутри
   `spawn_blocking` (не блокируем async-рантайм, не шарим состояние).
 - `Context` не выводит `Debug` автоматически — реализован вручную
-  из-за `Arc<dyn SpeechToText>`.
+  из-за `Arc<dyn SpeechToText>` и `Arc<dyn LlmProvider>`.
+- LLM включается только секцией `[llm]`: одного `MISTRAL_API_KEY` без
+  секции недостаточно (так задумано — конфиг явный).
+- LLM: без истории диалога, без стриминга, таймаут 30 с; ключ
+  читается при старте, смена переменной требует перезапуска.
+- роутинг «сначала команды»: фраза, начинающаяся со слова команды
+  (`погода ...`), уйдёт в команду, а не в LLM — это осознанно.
+- `jarvis-llm-mistral` не входит в фичу `vosk`: LLM работает и в
+  обычной сборке, нативных зависимостей у неё нет.
 - `config.toml` читается из текущего каталога; `config.toml` в
   `.gitignore`, пример — `config.example.toml`.
 - path-зависимости: crates/commands/* → ../../jarvis-core;

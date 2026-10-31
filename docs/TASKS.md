@@ -31,7 +31,9 @@
 - [ ] голосовой режим listen → dispatch (следующая сессия)
 - [ ] cmd-volume
 - [ ] cmd-note (JSON в dirs::data_dir)
-- [ ] Mistral LLM
+- [x] Mistral LLM (опциональный провайдер, ключ только из ENV)
+- [x] команда `ask` (принудительный запрос в LLM)
+- [x] умный роутинг: команды по `matches()`, затем LLM
 - [ ] TTS (озвучка ответов)
 - [ ] jarvis-cli: HTTP API (axum, /cmd /speak, X-Token)
 - [ ] README финализировать

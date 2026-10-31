@@ -9,3 +9,9 @@ default_city = "Moscow"
 # [stt]
 # model_path = "D:/models/vosk-model-small-ru-0.22"
 # sample_rate = 16000
+
+# LLM (Mistral). Раскомментируй секцию, чтобы включить умные ответы.
+# Ключ в файле не хранится — только имя переменной окружения.
+# [llm]
+# provider = "mistral"
+# api_key_env = "MISTRAL_API_KEY"

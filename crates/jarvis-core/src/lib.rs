@@ -5,12 +5,14 @@ pub mod config;
 pub mod context;
 pub mod dispatcher;
 pub mod error;
+pub mod llm;
 pub mod persona;
 pub mod stt;
 
 pub use command::{Command, Output, Speech};
-pub use config::Config;
+pub use config::{Config, LlmConfig};
 pub use context::Context;
 pub use dispatcher::Dispatcher;
 pub use error::Result;
+pub use llm::LlmProvider;
 pub use stt::{SpeechToText, SttConfig};

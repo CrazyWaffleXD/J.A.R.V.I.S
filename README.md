@@ -11,11 +11,13 @@
 
 | Путь | Назначение |
 | --- | --- |
-| `crates/jarvis-core` | трейты (`Command`, `SpeechToText`), диспетчер, конфиг, контекст |
-| `crates/jarvis-cli` | бинарь `jarvis`, REPL |
+| `crates/jarvis-core` | трейты (`Command`, `SpeechToText`, `LlmProvider`), диспетчер, конфиг, контекст |
+| `crates/jarvis-cli` | бинарь `jarvis`, REPL, умный выбор команда/LLM |
 | `crates/jarvis-platform` | открытие URL, системная громкость |
 | `crates/jarvis-audio` | запись с микрофона (воспроизведение — позже) |
 | `crates/jarvis-stt-vosk` | офлайн-распознавание речи на Vosk |
+| `crates/jarvis-wake` | wake word «Джарвис» (Vosk с грамматикой) |
+| `crates/jarvis-llm-mistral` | LLM-провайдер Mistral |
 | `crates/commands/cmd-*` | команды: `open`, `weather`, `volume`, `note` |
 
 ## Документация
@@ -52,9 +54,67 @@ default_city = "Moscow"
 [stt]
 model_path = "D:/models/vosk-model-small-ru-0.22"
 sample_rate = 16000
+
+[llm]
+provider = "mistral"
+api_key_env = "MISTRAL_API_KEY"
 ```
 
 Секция `[stt]` необязательна: без неё голосовой ввод просто отключён.
+Секция `[llm]` тоже необязательна: без неё работают только команды.
+
+## LLM (Mistral)
+
+Умные ответы на свободный текст. Провайдер опционален: без него `jarvis`
+работает как раньше — командами.
+
+**Ключ не хранится в файлах проекта.** В `config.toml` только имя переменной
+окружения, сам ключ — в окружении:
+
+```powershell
+# Windows (новая сессия терминала подхватит значение)
+setx MISTRAL_API_KEY "your_key"
+```
+
+```sh
+# Linux
+export MISTRAL_API_KEY="your_key"
+```
+
+Получить ключ: <https://admin.mistral.ai/organization/api-keys>
+
+Включить в `config.toml`:
+
+```toml
+[llm]
+provider = "mistral"
+api_key_env = "MISTRAL_API_KEY"
+```
+
+Использование:
+
+```text
+jarvis> ask привет
+Выполняю, сэр. Здравствуйте! Чем могу помочь?
+
+jarvis> а как дела?
+Выполняю, сэр. Спасибо, всё в порядке...
+```
+
+Как выбирается между командой и LLM: сначала `matches()` всех команд. Если
+команда нашлась (`погода`, `weather`, `open`, `listen`, `voice`, `ask`,
+`help`) — выполняется она и в сеть к LLM не уходит. Если не нашлась — текст
+отправляется в LLM. Отключить LLM можно, убрав секцию `[llm]` или переменную
+окружения: тогда на непонятный ввод будет «не понял команду, и LLM не
+настроена».
+
+В голосовом режиме (`voice`) та же логика: распознанная фраза сначала идёт в
+команды, а если команды нет — в LLM.
+
+Ограничения: нет истории диалога (каждый вопрос отдельный), нет стриминга,
+модель по умолчанию `mistral-small-latest`, таймаут запроса 30 с. Ключ
+читается из `api_key_env` при старте; если переменной нет, CLI печатает
+предупреждение и работает без LLM.
 
 ## Голосовой ввод (Vosk)
 
@@ -226,5 +286,6 @@ jarvis> voice
 ## Статус
 
 Скелет крейтов, REPL, `open`, `weather`, офлайн-`listen` и голосовой режим
-`voice` с wake word «Джарвис» на Vosk (опциональная фича `--features vosk`).
+`voice` с wake word «Джарвис» на Vosk (опциональная фича `--features vosk`),
+опциональная LLM (Mistral) с умным выбором «команда или ответ ИИ».
 `volume` и `note` пока заглушки.

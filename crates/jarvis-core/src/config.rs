@@ -29,6 +29,39 @@ pub struct Config {
     /// Секция `[stt]`; `None` — голосовой ввод не настроен.
     #[serde(default)]
     pub stt: Option<SttConfig>,
+    /// Секция `[llm]`; `None` — LLM не настроена, работают только команды.
+    #[serde(default)]
+    pub llm: Option<LlmConfig>,
+}
+
+/// Настройки LLM из секции `[llm]`.
+///
+/// Ключ API в конфиге не хранится: здесь только имя переменной окружения.
+#[derive(Clone, Debug, Deserialize)]
+pub struct LlmConfig {
+    /// Имя провайдера, пока поддерживается только `mistral`.
+    #[serde(default = "default_llm_provider")]
+    pub provider: String,
+    /// Переменная окружения с ключом API.
+    #[serde(default = "default_llm_api_key_env")]
+    pub api_key_env: String,
+}
+
+fn default_llm_provider() -> String {
+    "mistral".to_string()
+}
+
+fn default_llm_api_key_env() -> String {
+    "MISTRAL_API_KEY".to_string()
+}
+
+impl Default for LlmConfig {
+    fn default() -> Self {
+        Self {
+            provider: default_llm_provider(),
+            api_key_env: default_llm_api_key_env(),
+        }
+    }
 }
 
 impl Config {

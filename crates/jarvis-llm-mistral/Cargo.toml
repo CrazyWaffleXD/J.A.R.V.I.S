@@ -1,0 +1,16 @@
+[package]
+name = "jarvis-llm-mistral"
+description = "LLM-провайдер Mistral для jarvis"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+jarvis-core = { path = "../jarvis-core" }
+reqwest = { workspace = true, features = ["json"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+tracing.workspace = true

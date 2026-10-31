@@ -160,6 +160,78 @@ impl Command for BuiltinVoiceModeCommand {
     }
 }
 
+/// Встроенная команда `ask`: спросить у LLM напрямую, минуя команды.
+///
+/// Нужна, когда формулировка похожа на команду: `ask ...` гарантированно
+/// уходит в LLM.
+struct BuiltinAskCommand;
+
+#[async_trait::async_trait]
+impl Command for BuiltinAskCommand {
+    fn name(&self) -> &'static str {
+        "ask"
+    }
+
+    fn description(&self) -> &'static str {
+        "спросить у ИИ"
+    }
+
+    fn matches(&self, input: &str) -> bool {
+        let input = input.trim();
+        input == "ask"
+            || input == "спроси"
+            || input.starts_with("ask ")
+            || input.starts_with("спроси ")
+    }
+
+    async fn run(&self, input: &str, ctx: &Context) -> Result<Output> {
+        let input = input.trim();
+        let prompt = input
+            .strip_prefix("ask ")
+            .or_else(|| input.strip_prefix("спроси "))
+            .unwrap_or("")
+            .trim();
+
+        if prompt.is_empty() {
+            return Err(anyhow::anyhow!("пустой вопрос: ask <вопрос>"));
+        }
+
+        let llm = ctx.llm.as_ref().ok_or_else(|| {
+            anyhow::anyhow!(
+                "LLM не настроена. Установи MISTRAL_API_KEY и секцию [llm] в config.toml (см. README)"
+            )
+        })?;
+
+        let answer = llm.complete(prompt, None).await?;
+        let answer = answer.trim();
+        if answer.is_empty() {
+            return Err(anyhow::anyhow!("LLM вернула пустой ответ"));
+        }
+
+        Ok(Output {
+            text: persona::success(answer),
+            speech: None,
+        })
+    }
+}
+
+/// Не команда — пробуем LLM. Если LLM не настроена, честно говорим об этом.
+async fn answer_with_llm(input: &str, ctx: &Context) {
+    let Some(llm) = ctx.llm.as_ref() else {
+        println!(
+            "{}",
+            persona::error("не понял команду, и LLM не настроена. См. config.toml")
+        );
+        return;
+    };
+
+    match llm.complete(input, None).await {
+        Ok(text) if text.trim().is_empty() => println!("{}", persona::not_understood(input)),
+        Ok(text) => println!("{}", persona::success(text.trim())),
+        Err(e) => eprintln!("{}", persona::error(&format!("{e:#}"))),
+    }
+}
+
 /// Голосовой режим «как Алиса»: ждёт wake word «Джарвис», записывает
 /// отдельную команду, распознаёт её и отдаёт диспетчеру.
 ///
@@ -239,7 +311,20 @@ async fn run_voice_loop(ctx: &Context, dispatcher: &Dispatcher) -> anyhow::Resul
                 }
             }
             Some(Err(e)) => eprintln!("{}", persona::error(&format!("{e:#}"))),
-            None => println!("{}", persona::not_understood(&text)),
+            None => {
+                // Не команда — возможно, это вопрос к LLM.
+                if let Some(llm) = &ctx.llm {
+                    match llm.complete(&text, None).await {
+                        Ok(answer) if !answer.trim().is_empty() => {
+                            println!("{}", persona::success(answer.trim()));
+                        }
+                        Ok(_) => println!("{}", persona::not_understood(&text)),
+                        Err(e) => eprintln!("{}", persona::error(&format!("{e:#}"))),
+                    }
+                } else {
+                    println!("{}", persona::not_understood(&text));
+                }
+            }
         }
 
         println!("Жду 'Джарвис'...");
@@ -288,6 +373,30 @@ fn build_stt(_config: &Config) -> Option<std::sync::Arc<dyn jarvis_core::SpeechT
     None
 }
 
+/// Построить LLM-провайдера, если есть секция `[llm]` и ключ в окружении.
+///
+/// Ошибка инициализации не роняет CLI: без LLM работают команды, а
+/// свободный текст возвращает «LLM не настроена».
+fn build_llm(config: &Config) -> Option<std::sync::Arc<dyn jarvis_core::LlmProvider>> {
+    let llm_config = config.llm.as_ref()?;
+
+    match llm_config.provider.trim() {
+        "" | "mistral" => match jarvis_llm_mistral::build_mistral(llm_config) {
+            Ok(llm) => Some(llm),
+            Err(e) => {
+                eprintln!("предупреждение: LLM недоступна: {e:#}");
+                None
+            }
+        },
+        other => {
+            eprintln!(
+                "предупреждение: LLM-провайдер '{other}' не поддерживается (пока только mistral)"
+            );
+            None
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // Логи — в stderr, чтобы stdout оставался чистым для REPL и персонажа.
@@ -303,11 +412,13 @@ async fn main() -> anyhow::Result<()> {
     dispatcher.register(Box::new(WeatherCommand::new()));
     dispatcher.register(Box::new(BuiltinListenCommand));
     dispatcher.register(Box::new(BuiltinVoiceModeCommand));
+    dispatcher.register(Box::new(BuiltinAskCommand));
     dispatcher.register(Box::new(BuiltinHelpCommand));
 
     let config = load_config();
     let stt = build_stt(&config);
-    let ctx = Context { config, stt };
+    let llm = build_llm(&config);
+    let ctx = Context { config, stt, llm };
 
     tracing::info!(version = env!("CARGO_PKG_VERSION"), "jarvis starting");
     println!("{}", persona::greeting());
@@ -348,7 +459,7 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
             Some(Err(e)) => eprintln!("{}", persona::error(&format!("{e:#}"))),
-            None => println!("{}", persona::not_understood(line)),
+            None => answer_with_llm(line, &ctx).await,
         }
     }
 
