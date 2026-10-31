@@ -12,6 +12,7 @@ default_city = "Moscow"
 
 # LLM (Mistral). Раскомментируй секцию, чтобы включить умные ответы.
 # Ключ в файле не хранится — только имя переменной окружения.
-# [llm]
-# provider = "mistral"
-# api_key_env = "MISTRAL_API_KEY"
+[llm]
+provider = "mistral"
+api_key_env = "MISTRAL_API_KEY"  # <--- ТУТ ИМЕННО ИМЯ ПЕРЕМЕННОЙ, А НЕ КЛЮЧ
+model = "mistral-large-latest"

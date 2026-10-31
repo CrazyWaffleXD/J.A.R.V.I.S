@@ -1,4 +1,4 @@
-# State — обновлено 2026-10-31, сессия #7 (Mistral LLM)
+# State — обновлено 2026-10-31, сессия #7b (native-tls, сетевые ошибки)
 
 ## Готово
 
@@ -55,6 +55,11 @@
   команду, и LLM не настроена»
 - jarvis-cli: команда `ask` / `спроси` — принудительный запрос в LLM
 - jarvis-cli: в `voice` та же логика: команда → LLM → not_understood
+- reqwest: `native-tls` (Schannel на Windows, OpenSSL на Linux)
+  вместо `rustls-tls` — системные сертификаты и меньше TLS-сюрпризов
+- jarvis-llm-mistral: сетевые ошибки через `anyhow::Context`,
+  в REPL печатается вся цепочка (`{e:#}`): таймаут / DNS / TLS /
+  hyper, а не только «error sending request»
 - jarvis-cli: логи `tracing` в stderr, stdout чистый
 - jarvis-stt-vosk: `VoskStt` (Arc<Model>), `build_vosk`; `Recognizer`
   создаётся внутри `spawn_blocking`; `build.rs` читает `VOSK_LIB_DIR`
@@ -109,6 +114,11 @@
   Для v0.1 принято; Ctrl+C работает.
 - голосовой режим: «Джарвис, погода» одной фразой не сработает —
   wake word и команда записываются отдельно (как у Алисы).
+- проверено (сессия #7b): `reqwest` на `native-tls` собирается без
+  `VOSK_LIB_DIR`, clippy чист; при недоступной сети ошибка печатается
+  цепочкой — «не удалось отправить запрос в Mistral: … tunnel error: …
+  tcp connect error: … (os error 10061)», а не только
+  «error sending request».
 - проверено (сессия #7): без `MISTRAL_API_KEY` и с секцией `[llm]` —
   предупреждение при старте, `ask привет` → «LLM не настроена»,
   свободный текст → «не понял команду, и LLM не настроена»; с
@@ -170,6 +180,9 @@
   (`погода ...`), уйдёт в команду, а не в LLM — это осознанно.
 - `jarvis-llm-mistral` не входит в фичу `vosk`: LLM работает и в
   обычной сборке, нативных зависимостей у неё нет.
+- reqwest на `native-tls`: Windows использует системный Schannel,
+  Linux — OpenSSL (`pkg-config`, `libssl-dev`). Если сеть падает,
+  `{e:#}` показывает причину вплоть до io-ошибки.
 - `config.toml` читается из текущего каталога; `config.toml` в
   `.gitignore`, пример — `config.example.toml`.
 - path-зависимости: crates/commands/* → ../../jarvis-core;

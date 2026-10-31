@@ -9,7 +9,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context as _, Result};
 use async_trait::async_trait;
 use jarvis_core::llm::LlmProvider;
 use jarvis_core::LlmConfig;
@@ -79,6 +79,9 @@ impl LlmProvider for MistralClient {
 
         tracing::debug!(model, "запрос к Mistral");
 
+        // `.context`, а не `map_err` со строкой: anyhow сохраняет цепочку
+        // источников (TLS, DNS, таймаут, hyper), и `{e:#}` в REPL показывает
+        // её целиком, а не только «error sending request».
         let response = self
             .client
             .post(&url)
@@ -86,13 +89,13 @@ impl LlmProvider for MistralClient {
             .json(&body)
             .send()
             .await
-            .map_err(|e| anyhow!("не удалось отправить запрос в Mistral: {e}"))?;
+            .context("не удалось отправить запрос в Mistral")?;
 
         let status = response.status();
         let raw = response
             .text()
             .await
-            .map_err(|e| anyhow!("не удалось прочитать ответ Mistral: {e}"))?;
+            .context("не удалось прочитать ответ Mistral")?;
 
         if !status.is_success() {
             return Err(anyhow!(
@@ -101,8 +104,8 @@ impl LlmProvider for MistralClient {
             ));
         }
 
-        let parsed: ChatResponse = serde_json::from_str(&raw)
-            .map_err(|e| anyhow!("не удалось разобрать ответ Mistral: {e}"))?;
+        let parsed: ChatResponse =
+            serde_json::from_str(&raw).context("не удалось разобрать ответ Mistral")?;
 
         let text = parsed
             .choices

@@ -39,7 +39,8 @@ Vosk по умолчанию выключен: обычная сборка не 
 Голосовой ввод включается фичей `vosk` — см. раздел «Голосовой ввод (Vosk)».
 
 Linux: для записи звука (`cpal`) нужны заголовки ALSA, например
-`sudo apt install libasound2-dev`.
+`sudo apt install libasound2-dev`. Для HTTP-запросов (`reqwest` на
+`native-tls`) — OpenSSL: `sudo apt install pkg-config libssl-dev`.
 
 ## Конфигурация
 

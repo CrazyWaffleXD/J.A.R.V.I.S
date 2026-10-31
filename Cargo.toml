@@ -26,7 +26,7 @@ anyhow = "1.0"
 async-trait = "0.1"
 cpal = "0.15"
 fastrand = "2"
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "native-tls"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1.0", features = ["rt-multi-thread", "macros"] }
