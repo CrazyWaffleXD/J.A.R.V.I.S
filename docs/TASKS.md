@@ -25,10 +25,14 @@
 - [x] jarvis-stt-vosk (Vosk 0.3, build_vosk)
 - [x] jarvis-audio: record_until_silence (cpal)
 - [x] команда listen (распознанный текст, без выполнения)
+- [x] feature flag vosk в jarvis-cli (default = [], `--features vosk`)
+- [x] wake word «Джарвис» (Vosk с грамматикой, крейт `jarvis-wake`)
+- [x] команда `voice` (голосовой режим: wake word → команда → dispatch)
 - [ ] голосовой режим listen → dispatch (следующая сессия)
 - [ ] cmd-volume
 - [ ] cmd-note (JSON в dirs::data_dir)
 - [ ] Mistral LLM
+- [ ] TTS (озвучка ответов)
 - [ ] jarvis-cli: HTTP API (axum, /cmd /speak, X-Token)
 - [ ] README финализировать
 - [ ] релиз v0.1.0

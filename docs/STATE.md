@@ -1,4 +1,4 @@
-# State — обновлено 2026-10-31, сессия #3 (Vosk STT)
+# State — обновлено 2026-10-31, сессия #6 (wake word «Джарвис»)
 
 ## Готово
 
@@ -25,9 +25,24 @@
 - jarvis-cli: при старте строит STT через
   `jarvis_stt_vosk::build_vosk`, если есть `config.stt`; ошибка →
   предупреждение в stderr, `Context.stt = None`, CLI продолжает
+  (только при сборке с фичей `vosk`)
+- jarvis-cli: Vosk под feature flag — `default = []`,
+  `--features vosk` = полная сборка; `listen` зарегистрирован
+  всегда, без фичи возвращает «голосовой ввод не скомпилирован»
 - jarvis-cli: `listen` — запись `record_until_silence(rate, 1500,
   15000)` в `spawn_blocking`, `transcribe`, вывод «Распознано: …»;
   пустой результат → `persona::not_understood`
+- jarvis-wake: `WakeWordDetector` (Arc<Model> + грамматика
+  `джарвис`/`джарвиз`/`jarvis`/`[unk]`), `wait_for_wake` слушает
+  микрофон через `record_stream` и выходит на partial/result
+- jarvis-audio: `record_stream(sample_rate, on_chunk)` — потоковые
+  чанки ~100 мс PCM i16, `on_chunk → false` останавливает запись
+- jarvis-cli: команда `voice` под фичей `vosk` — REPL получает
+  плейсхолдер `__VOICE_LOOP__` и запускает `run_voice_loop`:
+  wake word → запись команды (1500/10000) → `transcribe` →
+  `dispatch`; выход по «стоп/хватит/выход/exit»
+- jarvis-cli: `print_help` вынесен отдельно (help в REPL и в
+  голосовом режиме)
 - jarvis-cli: логи `tracing` в stderr, stdout чистый
 - jarvis-stt-vosk: `VoskStt` (Arc<Model>), `build_vosk`; `Recognizer`
   создаётся внутри `spawn_blocking`; `build.rs` читает `VOSK_LIB_DIR`
@@ -48,11 +63,13 @@
 
 ## Известные проблемы
 
-- Крейт `vosk` линкуется с `libvosk` на этапе сборки:
+- Крейт `vosk` линкуется с `libvosk` на этапе сборки. Это касается
+  только сборки с `--features vosk`: обычные `cargo build` / `run`
+  не требуют нативной библиотеки. С фичей:
   `cargo check`/`clippy` проходят без библиотеки (метаданные), но
   `cargo build`/`run` без `libvosk.lib` (Windows) или `libvosk.so`
-  (Linux) падают на линковке. Собранный бинарь без DLL/SO в путях
-  загрузчика не стартует — это ошибка ОС, перехватить её из
+  (Linux) падают на линковке. Собранный с фичей бинарь без DLL/SO в
+  путях загрузчика не стартует — это ошибка ОС, перехватить её из
   приложения нельзя. Поэтому «нет libvosk → warn и работаем»
   выполняется только для отсутствующей модели/конфига.
 - Windows: официальный `vosk-win64-*.zip` содержит `libvosk.dll`,
@@ -71,24 +88,56 @@
 - `listen` передаёт `config.stt.sample_rate` (fallback 16000) и в
   запись, и в распознавание; модель small-ru обучена на 16 кГц.
 - `help` по-прежнему на плейсхолдере `__HELP__`.
+- wake word: грамматика Vosk строится по словарю модели. Если слова
+  «джарвис» в словаре нет (`vosk-model-small-ru-0.22`), распознавание
+  опирается на `[unk]` и акустически похожие слова — детект может
+  быть нестабильным. Лечится моделью с широким словарём.
+- wake word: `record_stream` не завершается сам, если устройство
+  отвалилось (callback перестаёт вызываться) — цикл ждёт `on_chunk`.
+  Для v0.1 принято; Ctrl+C работает.
+- голосовой режим: «Джарвис, погода» одной фразой не сработает —
+  wake word и команда записываются отдельно (как у Алисы).
+- проверено (сессия #6, без модели и микрофона): `--features vosk`
+  собирается с `VOSK_LIB_DIR`; `voice` без фичи отвечает «голосовой
+  ввод не скомпилирован (--features vosk)», с фичей и без `[stt]` —
+  «STT не настроена (см. README)»; `is_wake` покрыт юнит-тестами
+  (`cargo test -p jarvis-wake`). Живой прогон wake word с микрофоном
+  и моделью **не проводился** — модели Vosk на машине нет.
+- `jarvis-wake/build.rs` дублирует `jarvis-stt-vosk/build.rs`:
+  `cargo test -p jarvis-wake` линкуется сам по себе, без
+  `jarvis-stt-vosk` в графе, и без своего `link-search` не находит
+  `libvosk.lib`.
 - `webbrowser::open` синхронный внутри async `run`.
 
 ## Следующий шаг
 
-- голосовой режим: `listen` → распознанный текст в `dispatch`
-  (следующая сессия)
-- либо cmd-volume (Linux `pactl` / Windows `IAudioEndpointVolume`)
+- cmd-volume (Linux `pactl` / Windows `IAudioEndpointVolume`)
 - либо cmd-note (JSON в `dirs::data_dir`)
+- либо Mistral LLM (на выбор)
+- позже: TTS (озвучка ответов) — учесть эхо wake word
 
 ## Важное для следующей сессии
 
 - `libvosk` и модели Vosk пользователь ставит вручную; в репо их нет
   и автозагрузки нет (см. AGENTS.md, README).
+- «Джарвис» произносится отдельно от команды: wake-распознаватель
+  ограничен грамматикой, команда записывается вторым проходом.
+- при добавлении TTS эхо станет проблемой: микрофон услышит
+  собственную озвучку и может сработать на «Джарвис» в ответе —
+  понадобится пауза на время `speech` или отключение wake на TTS.
+- `record_stream` дренирует буфер cpal каждый опрос: при
+  бесконечном слушании память не растёт (в отличие от накопления в
+  `record_until_silence`).
+- обычная сборка не требует libvosk; для `listen` нужен
+  `--features vosk` + `VOSK_LIB_DIR` (и DLL/SO в пути загрузчика).
 - API `vosk` 0.3.1 отличается от «наивного»: `Model::new` →
   `Option<Model>`, `Recognizer::new(&model, f32)` → `Option`,
   `accept_waveform(&[i16])` без sample_rate,
-  `final_result().single()` → `Option<CompleteResultSingle>`, текст в
-  поле `.text: &str`.
+  `final_result()` → `CompleteResult` (не `Option`) и завершает
+  поток, поэтому в wake-цикле берём `result().single()` и
+  `partial_result().partial`; `new_with_grammar(&model, f32,
+  &[&str])` принимает **список фраз**, а не JSON-строку (JSON
+  собирает сам крейт).
 - `Recognizer` в 0.3.1 формально `Send + Sync`, но создаётся внутри
   `spawn_blocking` (не блокируем async-рантайм, не шарим состояние).
 - `Context` не выводит `Debug` автоматически — реализован вручную

@@ -97,6 +97,88 @@ pub fn record_until_silence(sample_rate: u32, silence_ms: u64, max_ms: u64) -> R
     Ok(resample(&samples, device_rate, sample_rate))
 }
 
+/// Потоковая запись с микрофона: отдаёт чанки PCM 16-bit по мере записи.
+///
+/// Чанк — около 100 мс моно-аудио, приведённого к `sample_rate`. Запись
+/// продолжается, пока `on_chunk` возвращает `true`; `false` останавливает
+/// поток, и функция возвращает `Ok(())`. Функция блокирующая (внутри живёт
+/// свой поток cpal) — вызывать из `spawn_blocking`.
+pub fn record_stream<F>(sample_rate: u32, mut on_chunk: F) -> Result<()>
+where
+    F: FnMut(&[i16]) -> bool,
+{
+    if sample_rate == 0 {
+        return Err(anyhow!("sample_rate должен быть больше нуля"));
+    }
+
+    let host = cpal::default_host();
+    let device = host
+        .default_input_device()
+        .ok_or_else(|| anyhow!("микрофон не найден: нет устройства ввода по умолчанию"))?;
+
+    let supported = device
+        .default_input_config()
+        .map_err(|e| anyhow!("не удалось получить формат микрофона: {e}"))?;
+    let device_rate = supported.sample_rate().0;
+    let config: StreamConfig = supported.config();
+
+    let buffer: Arc<Mutex<Vec<f32>>> = Arc::new(Mutex::new(Vec::new()));
+
+    let stream = match supported.sample_format() {
+        SampleFormat::F32 => build_stream::<f32>(&device, &config, Arc::clone(&buffer))?,
+        SampleFormat::I16 => build_stream::<i16>(&device, &config, Arc::clone(&buffer))?,
+        SampleFormat::U16 => build_stream::<u16>(&device, &config, Arc::clone(&buffer))?,
+        format => {
+            return Err(anyhow!(
+                "неподдерживаемый формат сэмплов микрофона: {format:?}"
+            ))
+        }
+    };
+
+    stream
+        .play()
+        .map_err(|e| anyhow!("не удалось запустить микрофон: {e}"))?;
+
+    // ~100 мс на частоте устройства: достаточно мелко для wake word и не
+    // дёргает `on_chunk` на каждый callback cpal.
+    let chunk_len = (device_rate / 10).max(1) as usize;
+    let mut pending: Vec<f32> = Vec::with_capacity(chunk_len * 2);
+
+    loop {
+        std::thread::sleep(POLL_INTERVAL);
+
+        // Забираем всё, что накопилось, и сразу очищаем буфер: при
+        // бесконечном ожидании wake word он не должен расти.
+        {
+            let mut buffer = buffer
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            pending.extend(buffer.drain(..));
+        }
+
+        if pending.len() < chunk_len {
+            continue;
+        }
+
+        let chunk = resample(&pending, device_rate, sample_rate);
+        pending.clear();
+
+        let pcm: Vec<i16> = chunk
+            .iter()
+            .map(|&s| (s.clamp(-1.0, 1.0) * i16::MAX as f32) as i16)
+            .collect();
+
+        if !pcm.is_empty() && !on_chunk(&pcm) {
+            break;
+        }
+    }
+
+    let _ = stream.pause();
+    drop(stream);
+
+    Ok(())
+}
+
 /// Собрать входной поток и писать моно-сэмплы `f32` в общий буфер.
 fn build_stream<T>(
     device: &cpal::Device,

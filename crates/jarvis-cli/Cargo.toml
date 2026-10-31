@@ -15,9 +15,14 @@ anyhow.workspace = true
 async-trait.workspace = true
 jarvis-audio.workspace = true
 jarvis-core.workspace = true
-jarvis-stt-vosk.workspace = true
+jarvis-stt-vosk = { path = "../jarvis-stt-vosk", optional = true }
+jarvis-wake = { path = "../jarvis-wake", optional = true }
 jarvis-cmd-open = { path = "../commands/cmd-open" }
 jarvis-cmd-weather = { path = "../commands/cmd-weather" }
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+
+[features]
+default = []
+vosk = ["dep:jarvis-stt-vosk", "dep:jarvis-wake"]

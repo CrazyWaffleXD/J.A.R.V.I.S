@@ -630,6 +630,7 @@ dependencies = [
  "jarvis-cmd-weather",
  "jarvis-core",
  "jarvis-stt-vosk",
+ "jarvis-wake",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -702,6 +703,17 @@ dependencies = [
  "anyhow",
  "async-trait",
  "jarvis-core",
+ "tokio",
+ "tracing",
+ "vosk",
+]
+
+[[package]]
+name = "jarvis-wake"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "jarvis-audio",
  "tokio",
  "tracing",
  "vosk",
