@@ -1,8 +1,18 @@
-/target
+# Сборка.
+/target/
 **/*.rs.bk
 
-# Локальный конфиг: пути и настройки у каждого свои.
-/config.toml
+# Секреты и локальные настройки: у каждого свои.
+config.toml
+/.env
+/.env.*
+!/.env.example
+
+# Скомпилированные библиотеки не коммитим.
+*.dll
+*.so
+*.dylib
+*.lib
 
 # Нативная библиотека Vosk и модели ставятся пользователем, не коммитим.
 libvosk.dll
@@ -11,3 +21,9 @@ libvosk.dylib
 libvosk.lib
 vosk-model-*/
 /models/
+
+# Мусор редакторов и ОС.
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

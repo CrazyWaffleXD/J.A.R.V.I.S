@@ -127,6 +127,13 @@
 - jarvis-cli: в `EnvFilter` добавлена директива `symphonia=warn` —
   mp3-декодер больше не пишет `estimating duration from bitrate`
   в stderr на каждый звук
+- предпубликационный аудит: `.gitignore` закрывает `config.toml`,
+  `.env`, `target/`, `*.dll`/`*.so`/`*.lib`, `.idea/`, `.vscode/`;
+  `config.toml` не отслеживается; ключей (`mstrl_`, `sk-`) нет ни в
+  индексе, ни в истории; моделей Vosk и `libvosk` в репозитории нет;
+  README получил разделы «О проекте» и «Лицензия»; fmt/check/clippy —
+  чисто; тесты без Vosk-крейтов — 12 passed, полный
+  `cargo test --workspace` падает только на линковке `libvosk`
 - проверено: `cargo fmt --all`, `cargo check --workspace`,
   `cargo clippy --workspace --all-targets -- -D warnings` — чисто
 
