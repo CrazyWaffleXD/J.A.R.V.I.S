@@ -282,14 +282,23 @@ impl Command for BuiltinSpeakCommand {
 }
 
 /// Разобрать ответ LLM: `__CMD__:<команда>` → команда, иначе `None`.
+///
+/// Берём только первую строку: модель иногда дописывает после команды
+/// пояснение или шутку, и хвост не должен попадать в диспетчер.
 fn llm_command(reply: &str) -> Option<&str> {
-    reply.trim().strip_prefix(CMD_PREFIX).map(str::trim)
+    reply
+        .trim()
+        .strip_prefix(CMD_PREFIX)
+        .map(|cmd| cmd.lines().next().unwrap_or("").trim())
 }
 
 /// Выполнить команду, которую запросила LLM.
 ///
 /// `ask` из ответа LLM не выполняем: это снова ушло бы в LLM.
 async fn run_llm_command(cmd: &str, ctx: &Context, dispatcher: &Dispatcher) {
+    // Первая строка — на случай, если команда пришла с хвостом.
+    let cmd = cmd.lines().next().unwrap_or("").trim();
+
     if cmd.is_empty() {
         println!("{}", persona::not_understood(""));
         return;
@@ -611,6 +620,11 @@ mod tests {
         assert_eq!(llm_command("__CMD__:открой ютуб"), Some("открой ютуб"));
         assert_eq!(llm_command("  __CMD__: weather \n"), Some("weather"));
         assert_eq!(llm_command("__CMD__:"), Some(""));
+        // Модель дописала шутку второй строкой — берём только команду.
+        assert_eq!(
+            llm_command("__CMD__:weather\nКстати, зонт не забудьте."),
+            Some("weather")
+        );
     }
 
     #[test]
