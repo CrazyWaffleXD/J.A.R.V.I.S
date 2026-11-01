@@ -10,12 +10,14 @@ default_city = "Moscow"
 # model_path = "D:/models/vosk-model-small-ru-0.22"
 # sample_rate = 16000
 
-# LLM (Mistral). Раскомментируй секцию, чтобы включить умные ответы.
-# Ключ в файле не хранится — только имя переменной окружения.
-# ministral-8b-latest — модель для бесплатного тарифа.
+# LLM. Раскомментируй секцию, чтобы включить умные ответы.
+# Пример для Mistral. Для других провайдеров укажите свои значения.
+# Ключ в файле не хранится: api_key_env — это ИМЯ переменной окружения,
+# а не сам ключ. Сам ключ положи в окружение (см. «Настройка LLM» в README).
+# ministral-8b-latest — модель для бесплатного тарифа Mistral.
 # system_prompt по умолчанию — промпт Джарвиса с __CMD__: (см. README).
 [llm]
 provider = "mistral"
-api_key_env = "MISTRAL_API_KEY"  # <--- ТУТ ИМЕННО ИМЯ ПЕРЕМЕННОЙ, А НЕ КЛЮЧ
+api_key_env = "MISTRAL_API_KEY"  # имя переменной окружения, не ключ
 model = "ministral-8b-latest"
 # system_prompt = "Отвечай кратко, одной фразой."
