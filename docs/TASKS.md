@@ -17,7 +17,7 @@
 - [x] jarvis-cli: REPL (std::io)
 - [ ] jarvis-platform: open_url (Linux/Windows)
 - [ ] jarvis-platform: set_volume (Linux pactl / Windows IAudioEndpointVolume)
-- [ ] jarvis-audio: play_file (rodio)
+- [x] jarvis-audio: play_file (rodio, mp3)
 - [x] cmd-open
 - [x] jarvis-core: persona (фразы greeting/success/error/…)
 - [x] cmd-weather (open-meteo)
@@ -37,6 +37,8 @@
 - [x] LLM: system prompt в конфиге (`[llm].system_prompt`, дефолт в ядре)
 - [x] LLM выполняет команды из ответа (`__CMD__:`), REPL и `voice`
 - [ ] проверить `ask открой ютуб` / `ask какая погода` с реальным ключом
+- [x] аудио: greeting/success + команда `speak` (файлы `assets/audio/`)
+- [x] LLM: чистый вывод ответа без приставки «Выполняю, сэр»
 - [ ] TTS (озвучка ответов)
 - [ ] jarvis-cli: HTTP API (axum, /cmd /speak, X-Token)
 - [ ] README финализировать

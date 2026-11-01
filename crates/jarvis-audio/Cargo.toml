@@ -9,4 +9,5 @@ rust-version.workspace = true
 [dependencies]
 anyhow.workspace = true
 cpal.workspace = true
+rodio.workspace = true
 tracing.workspace = true

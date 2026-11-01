@@ -1,15 +1,46 @@
-//! Захват аудио с микрофона.
+//! Захват и воспроизведение аудио.
 //!
-//! Синтез речи и распознавание остаются в других крейтах: здесь только
-//! запись моно-сэмплов `f32` в диапазоне `[-1.0, 1.0]`. Реализация
-//! воспроизведения на `rodio` появится позже.
+//! Синтез речи и распознавание остаются в других крейтах: здесь запись
+//! моно-сэмплов `f32` в диапазоне `[-1.0, 1.0]` и проигрывание готовых
+//! файлов (mp3) через `rodio`.
 
+use std::fs::File;
+use std::io::BufReader;
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Result};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Sample, SampleFormat, SizedSample, StreamConfig};
+use rodio::{Decoder, OutputStream, Sink};
+
+/// Проиграть аудиофайл до конца.
+///
+/// Функция блокирующая: создаёт свой аудиовыход и ждёт окончания файла,
+/// поэтому из async-кода её нужно вызывать через
+/// `tokio::task::spawn_blocking`. Формат определяется по содержимому
+/// (в `rodio` включён декодер mp3).
+pub fn play_file(path: &Path) -> Result<()> {
+    if !path.exists() {
+        return Err(anyhow!("аудиофайл не найден: {}", path.display()));
+    }
+
+    let (_stream, stream_handle) =
+        OutputStream::try_default().map_err(|e| anyhow!("не удалось открыть аудиовыход: {e}"))?;
+
+    let file =
+        File::open(path).map_err(|e| anyhow!("не удалось открыть {}: {e}", path.display()))?;
+    let source = Decoder::new(BufReader::new(file))
+        .map_err(|e| anyhow!("не удалось декодировать {}: {e}", path.display()))?;
+
+    let sink =
+        Sink::try_new(&stream_handle).map_err(|e| anyhow!("не удалось создать аудиопоток: {e}"))?;
+    sink.append(source);
+    sink.sleep_until_end();
+
+    Ok(())
+}
 
 /// Уровень RMS, ниже которого сигнал считается тишиной.
 const SILENCE_RMS: f32 = 0.01;

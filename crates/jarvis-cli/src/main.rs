@@ -1,5 +1,5 @@
-﻿use std::io::{self, Write};
-use std::path::Path;
+use std::io::{self, Write};
+use std::path::{Path, PathBuf};
 
 use jarvis_cmd_open::OpenCommand;
 use jarvis_cmd_weather::WeatherCommand;
@@ -126,6 +126,21 @@ fn print_help(dispatcher: &Dispatcher) {
     println!("{}", help_text(dispatcher));
 }
 
+/// Проиграть звук из `assets/audio`, если файл существует.
+///
+/// Аудиофайлы опциональны: нет файла или звуковой карты — просто тишина,
+/// REPL продолжает работать. `play_file` блокирующая, поэтому уходит в
+/// `spawn_blocking`; задачу не ждём, чтобы не задерживать ввод.
+fn play_sound(relative_path: &str) {
+    let path = Path::new(relative_path);
+    if path.exists() {
+        let path = path.to_path_buf();
+        let _handle = tokio::task::spawn_blocking(move || {
+            let _ = jarvis_audio::play_file(&path);
+        });
+    }
+}
+
 /// Встроенная команда `voice`: голосовой режим с wake word «Джарвис».
 ///
 /// Сама команда только просит REPL запустить цикл — у неё нет доступа к
@@ -214,11 +229,53 @@ impl Command for BuiltinAskCommand {
             return Err(anyhow::anyhow!("LLM вернула пустой ответ"));
         }
 
-        // Ответ печатается как есть: `persona::success` — для выполненных
-        // команд, а не для реплик LLM. `__CMD__:` выполнит вызывающая
-        // сторона (REPL/voice loop): у команды `ask` нет диспетчера.
+        // `__CMD__:` отдаём REPL как есть: у команды `ask` нет диспетчера,
+        // поэтому команду выполнит вызывающая сторона. Обычный ответ —
+        // реплика модели, а не выполненная команда: печатаем текст без
+        // приставки «Выполняю, сэр».
         Ok(Output {
             text: answer.to_string(),
+            speech: None,
+        })
+    }
+}
+
+/// Встроенная команда `speak`: проиграть указанный аудиофайл.
+struct BuiltinSpeakCommand;
+
+#[async_trait::async_trait]
+impl Command for BuiltinSpeakCommand {
+    fn name(&self) -> &'static str {
+        "speak"
+    }
+
+    fn description(&self) -> &'static str {
+        "проиграть аудиофайл: speak <путь>"
+    }
+
+    fn matches(&self, input: &str) -> bool {
+        input.trim().starts_with("speak ")
+    }
+
+    async fn run(&self, input: &str, _ctx: &Context) -> Result<Output> {
+        let path = input.trim().strip_prefix("speak ").unwrap_or("").trim();
+
+        if path.is_empty() {
+            return Err(anyhow::anyhow!("пустой путь: speak <файл>"));
+        }
+
+        let path = PathBuf::from(path);
+        if !path.is_file() {
+            return Err(anyhow::anyhow!("файл не найден: {}", path.display()));
+        }
+
+        let to_play = path.clone();
+        let _handle = tokio::task::spawn_blocking(move || {
+            let _ = jarvis_audio::play_file(&to_play);
+        });
+
+        Ok(Output {
+            text: "Воспроизвожу...".to_string(),
             speech: None,
         })
     }
@@ -480,6 +537,7 @@ async fn main() -> anyhow::Result<()> {
     dispatcher.register(Box::new(BuiltinListenCommand));
     dispatcher.register(Box::new(BuiltinVoiceModeCommand));
     dispatcher.register(Box::new(BuiltinAskCommand));
+    dispatcher.register(Box::new(BuiltinSpeakCommand));
     dispatcher.register(Box::new(BuiltinHelpCommand));
 
     let config = load_config();
@@ -489,6 +547,7 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!(version = env!("CARGO_PKG_VERSION"), "jarvis starting");
     println!("{}", persona::greeting());
+    play_sound("assets/audio/greeting.mp3");
 
     let stdin = io::stdin();
     loop {
@@ -526,7 +585,9 @@ async fn main() -> anyhow::Result<()> {
                     // а не печатаем строку `__CMD__:...`.
                     run_llm_command(cmd, &ctx, &dispatcher).await;
                 } else {
+                    // Команда выполнена — подтверждаем голосом, если звук есть.
                     println!("{}", output.text);
+                    play_sound("assets/audio/success.mp3");
                 }
             }
             Some(Err(e)) => eprintln!("{}", persona::error(&format!("{e:#}"))),
