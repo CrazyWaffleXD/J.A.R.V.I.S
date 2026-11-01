@@ -524,10 +524,13 @@ fn build_llm(config: &Config) -> Option<std::sync::Arc<dyn jarvis_core::LlmProvi
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // Логи — в stderr, чтобы stdout оставался чистым для REPL и персонажа.
+    // `symphonia=warn` глушит info-спам mp3-декодера («estimating duration
+    // from bitrate…»): при каждом звуке он писал в stderr несколько строк.
+    let env_filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("info"))
+        .add_directive("symphonia=warn".parse().unwrap());
     tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
-        )
+        .with_env_filter(env_filter)
         .with_writer(std::io::stderr)
         .init();
 

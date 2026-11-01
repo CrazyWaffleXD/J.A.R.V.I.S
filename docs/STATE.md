@@ -124,6 +124,9 @@
   `done_alt.mp3` — дубль исходного файла, кодом не используется
 - README: раздел «Аудио» (опциональность файлов, `speak`);
   `.gitattributes`: `*.mp3 binary`; DECISIONS: rodio и локальные файлы
+- jarvis-cli: в `EnvFilter` добавлена директива `symphonia=warn` —
+  mp3-декодер больше не пишет `estimating duration from bitrate`
+  в stderr на каждый звук
 - проверено: `cargo fmt --all`, `cargo check --workspace`,
   `cargo clippy --workspace --all-targets -- -D warnings` — чисто
 
